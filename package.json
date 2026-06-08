@@ -1,0 +1,25 @@
+{
+  "name": "gamers-sg",
+  "private": true,
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "db:generate": "pnpm --filter @gamers-sg/database db:generate",
+    "db:migrate": "pnpm --filter @gamers-sg/database db:migrate",
+    "db:push": "pnpm --filter @gamers-sg/database db:push",
+    "db:seed": "pnpm --filter @gamers-sg/database db:seed",
+    "db:studio": "pnpm --filter @gamers-sg/database db:studio",
+    "db:reset": "pnpm --filter @gamers-sg/database db:reset",
+    "setup": "bash scripts/dev-setup.sh"
+  },
+  "devDependencies": {
+    "turbo": "^2.9.16",
+    "typescript": "^5.7.0",
+    "prettier": "^3.4.0"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "packageManager": "pnpm@10.15.1"
+}

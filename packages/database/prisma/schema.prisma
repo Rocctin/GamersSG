@@ -1,0 +1,250 @@
+// Gamers.SG — Prisma Schema
+// Phase 1: Auth + RBAC + Foundation
+// DBMS: PostgreSQL
+// Resend magic-link auth (SingPass swap-in ready)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────
+
+enum Role {
+  GAMER
+  ORGANISER
+  ADMIN
+}
+
+enum AccountStatus {
+  PENDING    // Organiser submitted, awaiting SCOGA approval
+  APPROVED   // Active and fully accessible
+  REJECTED   // Declined by admin
+  SUSPENDED  // Temporarily locked by admin
+}
+
+enum AuditAction {
+  // Organiser lifecycle
+  ORGANISER_APPROVED
+  ORGANISER_REJECTED
+  ORGANISER_SUSPENDED
+  ORGANISER_REINSTATED
+
+  // User management
+  USER_SUSPENDED
+  USER_DELETED
+
+  // Auth events
+  MAGIC_LINK_SENT
+  LOGIN_SUCCESS
+  LOGIN_FAILED
+  SESSION_REVOKED
+
+  // Points (Phase 4)
+  POINTS_AWARDED
+  POINTS_DEDUCTED
+}
+
+// ─────────────────────────────────────────
+// USERS
+// Core identity record for all roles.
+// SingPass fields (nric_hash, legal_name) are
+// nullable now — populated when SingPass is integrated.
+// ─────────────────────────────────────────
+
+model User {
+  id          String        @id @default(uuid()) @db.Uuid
+  email       String        @unique
+  role        Role          @default(GAMER)
+  status      AccountStatus @default(PENDING)
+
+  // SingPass fields — null until integration
+  nric_hash   String?       @unique  // bcrypt/SHA-256 one-way hash, never plaintext
+  legal_name  String?                // from Myinfo, not publicly displayed by default
+
+  created_at  DateTime      @default(now()) @db.Timestamptz
+  updated_at  DateTime      @updatedAt @db.Timestamptz
+
+  // Relations
+  organiser_profile  OrganiserProfile?
+  gamer_profile      GamerProfile?
+  auth_tokens        AuthToken[]
+  refresh_tokens     RefreshToken[]
+  audit_logs_actor   AuditLog[]        @relation("AuditActor")
+  audit_logs_target  AuditLog[]        @relation("AuditTarget")
+
+  @@index([email])
+  @@index([role, status])
+  @@map("users")
+}
+
+// ─────────────────────────────────────────
+// ORGANISER PROFILE
+// Extended data for Organiser accounts.
+// Created at signup, visible to Admin during review.
+// ─────────────────────────────────────────
+
+model OrganiserProfile {
+  id               String   @id @default(uuid()) @db.Uuid
+  user_id          String   @unique @db.Uuid
+  user             User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  organisation_name  String
+  organisation_type  String         // e.g. "Company", "School", "Association", "Individual"
+  website            String?
+  contact_person     String         // Name of the person registering
+  contact_number     String?
+  description        String?        @db.Text
+
+  // Admin review fields
+  reviewed_by        String?        @db.Uuid   // Admin user ID who made the decision
+  reviewed_at        DateTime?      @db.Timestamptz
+  rejection_reason   String?        @db.Text
+
+  created_at         DateTime       @default(now()) @db.Timestamptz
+  updated_at         DateTime       @updatedAt @db.Timestamptz
+
+  @@map("organiser_profiles")
+}
+
+// ─────────────────────────────────────────
+// GAMER PROFILE
+// Stub for Phase 1 — expanded in Phase 4.
+// ─────────────────────────────────────────
+
+model GamerProfile {
+  id              String   @id @default(uuid()) @db.Uuid
+  user_id         String   @unique @db.Uuid
+  user            User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  username        String   @unique
+  display_name    String?
+  bio             String?  @db.VarChar(300)
+  avatar_url      String?
+  banner_url      String?
+
+  // Username change throttle — cannot change more than once per 90 days
+  username_changed_at  DateTime?  @db.Timestamptz
+
+  // Visibility: PUBLIC | MEMBERS_ONLY | PRIVATE
+  visibility      String   @default("PUBLIC")
+
+  // Membership
+  is_member       Boolean  @default(false)
+  member_since    DateTime? @db.Timestamptz
+  member_until    DateTime? @db.Timestamptz
+
+  // Points (Phase 4 — stored here for fast dashboard reads)
+  points_balance  Int      @default(0)
+
+  created_at      DateTime @default(now()) @db.Timestamptz
+  updated_at      DateTime @updatedAt @db.Timestamptz
+
+  @@index([username])
+  @@map("gamer_profiles")
+}
+
+// ─────────────────────────────────────────
+// AUTH TOKENS
+// Magic-link / OTP tokens issued via Resend.
+// One-time use, short expiry (30 mins default).
+// SingPass will bypass this table entirely —
+// it handles its own token exchange via OAuth.
+// ─────────────────────────────────────────
+
+model AuthToken {
+  id          String    @id @default(uuid()) @db.Uuid
+  user_id     String    @db.Uuid
+  user        User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  token_hash  String    @unique   // SHA-256 hash of the raw token sent in the email
+  expires_at  DateTime  @db.Timestamptz
+  used_at     DateTime? @db.Timestamptz  // null = unused, set on first use
+  created_at  DateTime  @default(now()) @db.Timestamptz
+
+  // IP + user agent for audit trail
+  request_ip  String?
+  user_agent  String?
+
+  @@index([token_hash])
+  @@index([user_id])
+  @@map("auth_tokens")
+}
+
+// ─────────────────────────────────────────
+// REFRESH TOKENS
+// Long-lived tokens for session renewal.
+// Stored in DB so they can be individually revoked
+// (e.g. on account suspension).
+// ─────────────────────────────────────────
+
+model RefreshToken {
+  id           String    @id @default(uuid()) @db.Uuid
+  user_id      String    @db.Uuid
+  user         User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  token_hash   String    @unique
+  expires_at   DateTime  @db.Timestamptz
+  revoked_at   DateTime? @db.Timestamptz   // null = active
+  created_at   DateTime  @default(now()) @db.Timestamptz
+
+  // Device fingerprint — useful for "sign out of all devices"
+  request_ip   String?
+  user_agent   String?
+
+  @@index([token_hash])
+  @@index([user_id])
+  @@map("refresh_tokens")
+}
+
+// ─────────────────────────────────────────
+// AUDIT LOGS
+// Immutable record of all admin actions.
+// Insert-only — never update or delete rows.
+// ─────────────────────────────────────────
+
+model AuditLog {
+  id           String      @id @default(uuid()) @db.Uuid
+
+  actor_id     String      @db.Uuid          // Admin who performed the action
+  actor        User        @relation("AuditActor", fields: [actor_id], references: [id])
+
+  target_id    String?     @db.Uuid          // User/entity acted upon (nullable for system events)
+  target       User?       @relation("AuditTarget", fields: [target_id], references: [id])
+
+  action       AuditAction
+  target_type  String?                       // e.g. "organiser", "listing", "user"
+  metadata     Json?                         // Extra context — rejection reason, old/new values, etc.
+  ip_address   String?
+
+  created_at   DateTime    @default(now()) @db.Timestamptz
+
+  @@index([actor_id])
+  @@index([target_id])
+  @@index([action])
+  @@index([created_at])
+  @@map("audit_logs")
+}
+
+// ─────────────────────────────────────────
+// RATE LIMIT BUCKETS
+// Simple DB-backed rate limiting for auth endpoints.
+// Replace with Redis in production at scale.
+// ─────────────────────────────────────────
+
+model RateLimitBucket {
+  id          String   @id @default(uuid()) @db.Uuid
+  key         String   @unique   // e.g. "magic_link:user@email.com" or "login:1.2.3.4"
+  count       Int      @default(1)
+  window_start DateTime @db.Timestamptz
+  updated_at  DateTime @updatedAt @db.Timestamptz
+
+  @@index([key])
+  @@map("rate_limit_buckets")
+}
