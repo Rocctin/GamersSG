@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { Gamepad2, Menu, LogOut, User, Settings, Shield } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -108,5 +109,3 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
     </header>
   );
 }
-
-import { useState as useStateReact } from "react";
