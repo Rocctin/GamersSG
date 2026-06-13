@@ -1,5 +1,5 @@
 import { Injectable, CanActivate, ExecutionContext, HttpException, HttpStatus } from "@nestjs/common";
-import { PrismaService } from "../../../prisma/prisma.service";
+import { PrismaService } from "../../prisma/prisma.service";
 
 @Injectable()
 export class RateLimitGuard implements CanActivate {
@@ -18,10 +18,7 @@ export class RateLimitGuard implements CanActivate {
     const bucket = await this.prisma.rateLimitBucket.upsert({
       where: { key },
       update: {
-        count: {
-          // If window expired, reset to 1; otherwise increment
-          // We handle this logic in the query below
-        },
+        // count handled below based on window expiry
       },
       create: {
         key,
