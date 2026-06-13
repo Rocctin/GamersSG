@@ -5,9 +5,11 @@ import { AuthController } from "./auth.controller";
 import { AuthService } from "./auth.service";
 import { EmailService } from "./email/email.service";
 import { JwtStrategy } from "./strategies/jwt.strategy";
+import { AuditModule } from "../audit/audit.module";
 
 @Module({
   imports: [
+    AuditModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
