@@ -3,7 +3,7 @@
 import { useAuth } from "@/hooks/use-auth";
 import { RoleBadge } from "./role-badge";
 import { Trophy, Users, Calendar, Star } from "lucide-react";
-import type { Role } from "@gamers-sg/database";
+import type { Role } from "@gamers-sg/shared/enums";
 
 const STATS: Record<
   Role,

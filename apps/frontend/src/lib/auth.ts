@@ -1,5 +1,5 @@
 import type { UserProfileDto } from "@gamers-sg/shared/dto";
-import type { Role } from "@gamers-sg/database";
+import type { Role } from "@gamers-sg/shared/enums";
 
 export function hasRole(user: UserProfileDto | null, role: Role): boolean {
   return user?.role === role;

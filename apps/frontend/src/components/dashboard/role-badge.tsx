@@ -1,4 +1,4 @@
-import type { Role } from "@gamers-sg/database";
+import type { Role } from "@gamers-sg/shared/enums";
 
 const ROLE_STYLES: Record<Role, string> = {
   GAMER: "bg-blue-500/10 text-blue-400 border-blue-500/20",

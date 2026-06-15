@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/hooks/use-auth";
@@ -15,8 +15,13 @@ export default function LoginPage() {
   const [isSent, setIsSent] = useState(false);
 
   // Redirect if already authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      router.push("/dashboard");
+    }
+  }, [isAuthenticated, router]);
+
   if (isAuthenticated) {
-    router.push("/dashboard");
     return null;
   }
 

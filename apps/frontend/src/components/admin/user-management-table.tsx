@@ -68,7 +68,7 @@ export function UserManagementTable() {
     try {
       const reason =
         status === "SUSPENDED"
-          ? prompt("Reason for suspension:")
+          ? (prompt("Reason for suspension:") || undefined)
           : undefined;
       await apiClient.post(`/admin/users/${userId}/status`, { status, reason });
       toast.success(`User ${status === "SUSPENDED" ? "suspended" : "reinstated"}`);

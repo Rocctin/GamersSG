@@ -3,7 +3,7 @@
 import { useAuth } from "@/hooks/use-auth";
 import { RoleBadge } from "@/components/dashboard/role-badge";
 import { Mail, Calendar, ShieldCheck } from "lucide-react";
-import type { Role } from "@gamers-sg/database";
+import type { Role } from "@gamers-sg/shared/enums";
 
 export default function ProfilePage() {
   const { user } = useAuth();

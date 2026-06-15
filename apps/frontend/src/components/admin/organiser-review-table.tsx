@@ -143,7 +143,11 @@ export function OrganiserReviewTable() {
                   <button
                     onClick={() => {
                       const reason = prompt("Rejection reason:");
-                      if (reason) handleReview(org.userId, "REJECT", reason);
+                      if (!reason) {
+                        toast.error("Rejection reason is required");
+                        return;
+                      }
+                      handleReview(org.userId, "REJECT", reason);
                     }}
                     disabled={actionLoading === org.userId}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition-colors disabled:opacity-50"

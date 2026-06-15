@@ -10,7 +10,7 @@ import {
 } from "react";
 import apiClient, { setAccessToken } from "./api-client";
 import type { UserProfileDto } from "@gamers-sg/shared/dto";
-import type { Role } from "@gamers-sg/database";
+import type { Role } from "@gamers-sg/shared/enums";
 
 interface AuthState {
   user: UserProfileDto | null;

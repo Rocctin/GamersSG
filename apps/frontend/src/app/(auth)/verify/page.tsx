@@ -40,8 +40,13 @@ export default function VerifyPage() {
       });
   }, [searchParams, verifyToken, router]);
 
+  useEffect(() => {
+    if (isAuthenticated) {
+      router.push("/dashboard");
+    }
+  }, [isAuthenticated, router]);
+
   if (isAuthenticated) {
-    router.push("/dashboard");
     return null;
   }
 
