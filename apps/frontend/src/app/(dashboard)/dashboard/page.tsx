@@ -3,7 +3,7 @@
 import { WelcomeCard } from "@/components/dashboard/welcome-card";
 import { useAuth } from "@/hooks/use-auth";
 import Link from "next/link";
-import { ArrowRight, Gamepad2, Trophy, Users, Sword } from "lucide-react";
+import { ArrowRight, Gamepad2, Trophy, Users, Sword, Info } from "lucide-react";
 
 const QUICK_LINKS = [
   {
@@ -29,6 +29,12 @@ const QUICK_LINKS = [
     description: "Exclusive deals for members",
     href: "#",
     icon: Gamepad2,
+  },
+  {
+    label: "About Gamers.SG",
+    description: "Learn more about the platform and our mission",
+    href: "/about",
+    icon: Info,
   },
 ];
 

@@ -13,6 +13,7 @@ import {
 import { Request, Response } from "express";
 import { AuthService } from "./auth.service";
 import { RateLimitGuard } from "../../common/guards/rate-limit.guard";
+import { RateLimit } from "../../common/decorators/rate-limit.decorator";
 import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
 import { Public } from "../../common/decorators/public.decorator";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
@@ -39,20 +40,31 @@ export class AuthController {
   @Public()
   @Post("magic-link/verify")
   @HttpCode(HttpStatus.OK)
+  @RateLimit({ windowMinutes: 15, maxAttempts: 10, keyPrefix: "verify" })
+  @UseGuards(RateLimitGuard)
   async verifyMagicLink(
     @Body("token") token: string,
     @Res({ passthrough: true }) res: Response,
   ) {
     const result = await this.authService.verifyMagicLink(token);
 
-    // Set refresh token as httpOnly cookie
-    const maxAge = AUTH.REFRESH_TOKEN_EXPIRY_MS;
+    // Set refresh token as httpOnly cookie (only sent to /api/auth)
+    const refreshMaxAge = AUTH.REFRESH_TOKEN_EXPIRY_MS;
     res.cookie("refresh_token", result.refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       path: "/api/auth",
-      maxAge,
+      maxAge: refreshMaxAge,
+    });
+
+    // Set access token as httpOnly cookie (readable by Next.js middleware at all paths)
+    res.cookie("access_token", result.accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 900_000, // 15 minutes in ms
     });
 
     // Return everything except the raw refresh token
@@ -66,6 +78,8 @@ export class AuthController {
   @Public()
   @Post("refresh")
   @HttpCode(HttpStatus.OK)
+  @RateLimit({ windowMinutes: 5, maxAttempts: 20, keyPrefix: "refresh" })
+  @UseGuards(RateLimitGuard)
   async refreshTokens(
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
@@ -77,13 +91,22 @@ export class AuthController {
 
     const result = await this.authService.refreshTokens(refreshToken);
 
-    const maxAge = AUTH.REFRESH_TOKEN_EXPIRY_MS;
+    const refreshMaxAge = AUTH.REFRESH_TOKEN_EXPIRY_MS;
     res.cookie("refresh_token", result.refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       path: "/api/auth",
-      maxAge,
+      maxAge: refreshMaxAge,
+    });
+
+    // Set access token as httpOnly cookie (readable by Next.js middleware at all paths)
+    res.cookie("access_token", result.accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 900_000, // 15 minutes in ms
     });
 
     return {
@@ -105,6 +128,7 @@ export class AuthController {
     }
 
     res.clearCookie("refresh_token", { path: "/api/auth" });
+    res.clearCookie("access_token", { path: "/" });
     return { message: "Logged out successfully" };
   }
 

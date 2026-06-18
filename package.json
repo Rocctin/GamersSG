@@ -9,6 +9,7 @@
     "db:migrate": "pnpm --filter @gamers-sg/database db:migrate",
     "db:push": "pnpm --filter @gamers-sg/database db:push",
     "db:seed": "pnpm --filter @gamers-sg/database db:seed",
+    "db:demo": "pnpm --filter @gamers-sg/database db:demo",
     "db:studio": "pnpm --filter @gamers-sg/database db:studio",
     "db:reset": "pnpm --filter @gamers-sg/database db:reset",
     "setup": "bash scripts/dev-setup.sh"

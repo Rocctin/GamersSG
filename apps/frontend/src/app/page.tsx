@@ -59,9 +59,9 @@ function Navbar({ isAuthenticated }: { isAuthenticated: boolean }) {
             <a href="#features" className="text-slate-400 hover:text-slate-200 transition-colors">
               Features
             </a>
-            <a href="#about" className="text-slate-400 hover:text-slate-200 transition-colors">
+            <Link href="/about" className="text-slate-400 hover:text-slate-200 transition-colors">
               About
-            </a>
+            </Link>
             <Link
               href={isAuthenticated ? "/dashboard" : "/login"}
               className="bg-brand-500 hover:bg-brand-600 text-white font-semibold px-5 py-2 rounded-lg transition-colors"

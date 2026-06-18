@@ -7,12 +7,15 @@ import {
   Param,
   HttpCode,
   HttpStatus,
+  UseGuards,
 } from "@nestjs/common";
 import { UsersService } from "./users.service";
 import { GamerProfileService } from "./profiles/gamer-profile.service";
 import { OrganiserProfileService } from "./profiles/organiser-profile.service";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { Roles } from "../../common/decorators/roles.decorator";
+import { RateLimit } from "../../common/decorators/rate-limit.decorator";
+import { RateLimitGuard } from "../../common/guards/rate-limit.guard";
 import type { JwtPayload } from "@gamers-sg/shared/types";
 import type {
   UpdateGamerProfileDto,
@@ -67,6 +70,8 @@ export class UsersController {
 
   @Get(":id")
   @HttpCode(HttpStatus.OK)
+  @RateLimit({ windowMinutes: 1, maxAttempts: 30, keyPrefix: "user_lookup" })
+  @UseGuards(RateLimitGuard)
   async getUserById(@Param("id") userId: string) {
     return this.usersService.getPublicProfile(userId);
   }

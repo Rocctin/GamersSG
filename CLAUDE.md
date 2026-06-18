@@ -57,7 +57,7 @@ pnpm lint
 
 ### Database Commands
 
-All database commands are defined in `packages/database/package.json` and runnable from root via the `packageManager` field:
+All database commands are defined in `packages/database/package.json` and proxied from root `package.json`:
 
 ```bash
 pnpm db:generate    # prisma generate — regenerate Prisma Client after schema changes
@@ -66,8 +66,13 @@ pnpm db:migrate     # prisma migrate dev — create + apply a named migration
 pnpm db:seed        # tsx prisma/seed.ts — seed admin user
 pnpm db:studio      # prisma studio — open Prisma Studio GUI
 pnpm db:reset       # prisma migrate reset — WARNING: deletes all data
-pnpm db:validate    # prisma validate — check schema without generating
-pnpm db:format      # prisma format — format schema file
+```
+
+Additional database commands are available via the database package filter (not proxied at root):
+
+```bash
+pnpm --filter @gamers-sg/database db:validate   # prisma validate — check schema
+pnpm --filter @gamers-sg/database db:format     # prisma format — format schema
 ```
 
 The database package exports a PrismaClient singleton from `@gamers-sg/database` (prevents multiple instances in dev via `globalThis`).
@@ -105,11 +110,12 @@ src/
 │   ├── decorators/
 │   │   ├── public.decorator.ts     # @Public() — skips JWT guard
 │   │   ├── roles.decorator.ts      # @Roles(Role.ADMIN) — RBAC metadata
-│   │   └── current-user.decorator.ts  # @CurrentUser() — extracts JWT payload from request
+│   │   ├── current-user.decorator.ts  # @CurrentUser() — extracts JWT payload from request
+│   │   └── rate-limit.decorator.ts     # @RateLimit(config) — configures per-endpoint rate limits
 │   ├── guards/
 │   │   ├── jwt-auth.guard.ts       # Global guard: checks JWT unless @Public()
 │   │   ├── roles.guard.ts          # Global guard: checks @Roles() metadata
-│   │   └── rate-limit.guard.ts     # Per-route guard: DB-backed rate limiting
+│   │   └── rate-limit.guard.ts     # Per-route guard: DB-backed rate limiting, configurable via @RateLimit() decorator
 │   └── filters/
 │       └── http-exception.filter.ts # Global filter: wraps errors as { success, error }
 └── modules/
@@ -141,7 +147,15 @@ src/
 - **Guards run globally**: `JwtAuthGuard` and `RolesGuard` are registered as `APP_GUARD` in `AppModule`. Use `@Public()` to bypass JWT; use `@Roles()` to require specific roles. If no `@Roles()` is set, all authenticated users can access.
 - **Prisma is global**: `PrismaModule` is `@Global()` so all services inject `PrismaService` without importing the module.
 - **Response format**: All errors go through `HttpExceptionFilter`, which outputs `{ success: false, error: { code, message, details? } }`.
-- **Rate limiting**: `RateLimitGuard` is applied per-route (only on `POST /auth/magic-link/request` currently). DB-backed, 5 attempts per 15 min per email. Replace with Redis at scale.
+- **Rate limiting**: `RateLimitGuard` is applied per-route via the `@RateLimit()` decorator, which accepts `{ windowMinutes, maxAttempts, keyPrefix }`. The guard keys by IP for decorator-configured endpoints; legacy endpoints without the decorator fall back to email-based keys. DB-backed (`RateLimitBucket` table). Replace with Redis at scale.
+
+  Current rate limits:
+  | Endpoint | Window | Max Attempts | Key |
+  |---|---|---|---|
+  | `POST /auth/magic-link/request` | 15 min | 5 | email (legacy) |
+  | `POST /auth/magic-link/verify` | 15 min | 10 | IP |
+  | `POST /auth/refresh` | 5 min | 20 | IP |
+  | `GET /users/:id` | 1 min | 30 | IP |
 
 ## Authentication Flow
 
@@ -153,7 +167,9 @@ src/
 4. User clicks link → `POST /api/auth/magic-link/verify` with raw token
 5. System validates: token exists, unused, not expired, user not suspended
 6. Returns JWT access token (15-min expiry) + user profile in response body
-7. Sets refresh token (30-day expiry) as `httpOnly` cookie at path `/api/auth`
+7. Sets **two** `httpOnly` cookies:
+   - `refresh_token` (30-day expiry) at path `/api/auth` — sent only to auth endpoints
+   - `access_token` (15-min expiry) at path `/` — readable by Next.js middleware for route protection
 8. Refresh token is stored in DB as SHA-256 hash for individual revocation
 
 ### Session Persistence (Refresh Token Rotation)
@@ -165,7 +181,13 @@ src/
 
 ### Backend → Frontend Token Flow
 
-The refresh token is stored as an `httpOnly`, `sameSite: "lax"` cookie (not accessible to JS). The access token is stored **in memory only** (never `localStorage`). On page load, `AuthProvider` calls `/auth/refresh` to restore the session.
+Both tokens are set as `httpOnly`, `sameSite: "lax"` cookies (not accessible to JS) by the backend:
+- `refresh_token` — path `/api/auth`, 30-day expiry, sent only on auth API calls
+- `access_token` — path `/`, 15-min expiry, sent on all requests (readable by Next.js middleware)
+
+The frontend also stores the **access token in memory** (via `api-client.ts`) to attach it as an `Authorization: Bearer` header on API requests — this is the token the backend actually verifies cryptographically. The `access_token` cookie is used only by the Next.js middleware for client-side route gating (see Middleware section).
+
+On page load, `AuthProvider` calls `POST /api/auth/refresh` (which sends the `refresh_token` cookie) to restore the session. The refresh endpoint also rotates both cookies and returns a fresh access token in the response body.
 
 ## Frontend Architecture (Next.js 15 App Router)
 
@@ -195,8 +217,8 @@ src/app/
 
 ```
 AuthProvider (React Context)
-  ├── On mount: tries POST /auth/refresh (sends httpOnly cookie automatically)
-  ├── On success: stores access token in memory, sets user + isAuthenticated
+  ├── On mount: tries POST /auth/refresh (sends cookies automatically via withCredentials)
+  ├── On success: stores access token in memory (for Authorization header) + sets user + isAuthenticated
   ├── On failure: clears state, user sees login page
   └── Provides: user, isLoading, isAuthenticated, requestMagicLink, verifyToken, logout
 
@@ -209,6 +231,16 @@ apiClient (Axios instance)
   │   └── On refresh failure: clears token, redirects to /login
   └── withCredentials: true (sends cookies automatically)
 ```
+
+### Next.js Middleware (Route Protection)
+
+A `middleware.ts` at the frontend root runs before page JS loads and provides a fast client-side gate:
+
+- **Protected routes** (`/dashboard/*`, `/profile/*`, `/settings/*`, `/admin/*`): redirects to `/login?redirect=<path>` if no `access_token` cookie is present
+- **Admin routes** (`/admin/*`): decodes the `access_token` JWT using `jose` (decode only — no signature verification) and checks `claims.role === "ADMIN"`. Non-admin users are redirected to `/dashboard`
+- **Caveat**: Middleware JWT decoding is NOT cryptographic verification. The backend enforces actual auth on every API call. A forged cookie with a fake role would render empty page shells without data.
+
+The middleware prevents non-ADMIN users from ever downloading the admin component tree, and unauthenticated users from downloading protected pages.
 
 ### Key Components
 
@@ -226,6 +258,7 @@ apiClient (Axios instance)
 - **Sonner** for toast notifications
 - **react-hook-form** + **zod** for form validation
 - **class-variance-authority** + **tailwind-merge** + **clsx** via `cn()` utility in `@/lib/utils`
+- **jose** for JWT decoding in Next.js middleware (decode only — signature verification is backend-side)
 
 ## Shared Package (`@gamers-sg/shared`)
 

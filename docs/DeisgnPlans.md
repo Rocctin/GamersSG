@@ -14,8 +14,8 @@
 | `pnpm install` | ✅ Done | `pnpm-lock.yaml` exists. 499 packages installed. |
 | `pnpm.onlyBuiltDependencies` | ✅ Configured | Prisma, esbuild, sharp build scripts approved via `package.json` |
 | Prisma generate | ✅ Done | Prisma Client generated successfully |
-| PostgreSQL | ❌ Not installed | User needs to install locally |
-| Prisma db:push / db:seed | ❌ Not run | Depends on PostgreSQL |
+| PostgreSQL | ✅ Done | User needs to install locally |
+| Prisma db:push / db:seed | ✅ Done | PostgreSQL installed on main desktop | Not installed on laptop, unable to do said commands
 | End-to-end verification | ❌ Not run | Depends on PostgreSQL + db:seed |
 
 ---

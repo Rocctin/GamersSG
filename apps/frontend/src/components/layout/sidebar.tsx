@@ -10,6 +10,7 @@ import {
   LayoutDashboard,
   User,
   Settings,
+  Info,
   Shield,
   Users,
   Building2,
@@ -27,6 +28,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Profile", href: "/profile", icon: User },
   { label: "Settings", href: "/settings", icon: Settings },
+  { label: "About", href: "/about", icon: Info },
 ];
 
 const ADMIN_ITEMS: NavItem[] = [
