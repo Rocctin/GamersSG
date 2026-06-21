@@ -9,8 +9,8 @@ importers:
   .:
     devDependencies:
       '@types/node':
-        specifier: ^25.9.3
-        version: 25.9.3
+        specifier: ^25.9.4
+        version: 25.9.4
       prettier:
         specifier: ^3.4.0
         version: 3.8.3
@@ -216,8 +216,8 @@ importers:
         version: 6.19.3(prisma@6.19.3(typescript@5.9.3))(typescript@5.9.3)
     devDependencies:
       '@types/node':
-        specifier: ^22.0.0
-        version: 22.19.20
+        specifier: ^22.19.21
+        version: 22.19.21
       prisma:
         specifier: ^6.0.0
         version: 6.19.3(typescript@5.9.3)
@@ -1498,8 +1498,11 @@ packages:
   '@types/node@22.19.20':
     resolution: {integrity: sha512-6tELRwSDYWW9EdZhbeZmYGZ1/7Djkt+Ah3/ScEYT9cDord7UJzasR/4D3VONg9tQI5CDp+/CZC1AXj2pCFOvpw==}
 
-  '@types/node@25.9.3':
-    resolution: {integrity: sha512-603BddQMv3pUcr4U2dhujk83N2tTDVr/34wII2B6bJy6g+8WD6yUb11jszNs0gdi4PesVWl7ABt8nYMVpnLUcg==}
+  '@types/node@22.19.21':
+    resolution: {integrity: sha512-VMeFBSCKQKmm2swI2kW51SFusDqekC6q9trBCvJ/JliDchFSuoYYKN7yVNjPthP1HKZcx3U1gI/wTcEBjEFKTA==}
+
+  '@types/node@25.9.4':
+    resolution: {integrity: sha512-dszCsrKb5U7ZsVZBWiHFklTloVl0mSEnWH/iZXfZUlI4rzCUnsvGmgqfuVRHL54ugE7/wRuxEIXRa2iMZ+BG6g==}
 
   '@types/passport-jwt@4.0.1':
     resolution: {integrity: sha512-Y0Ykz6nWP4jpxgEUYq8NoVZeCQPo1ZndJLfapI249g1jHChvRfZRO/LS3tqu26YgAS/laI1qx98sYGz0IalRXQ==}
@@ -4278,16 +4281,16 @@ snapshots:
 
   '@types/better-sqlite3@7.6.13':
     dependencies:
-      '@types/node': 22.19.20
+      '@types/node': 22.19.21
 
   '@types/body-parser@1.19.6':
     dependencies:
       '@types/connect': 3.4.38
-      '@types/node': 22.19.20
+      '@types/node': 22.19.21
 
   '@types/connect@3.4.38':
     dependencies:
-      '@types/node': 22.19.20
+      '@types/node': 22.19.21
 
   '@types/cookie-parser@1.4.10(@types/express@5.0.6)':
     dependencies:
@@ -4307,7 +4310,7 @@ snapshots:
 
   '@types/express-serve-static-core@5.1.1':
     dependencies:
-      '@types/node': 22.19.20
+      '@types/node': 22.19.21
       '@types/qs': 6.15.1
       '@types/range-parser': 1.2.7
       '@types/send': 1.2.1
@@ -4325,7 +4328,7 @@ snapshots:
   '@types/jsonwebtoken@9.0.10':
     dependencies:
       '@types/ms': 2.1.0
-      '@types/node': 22.19.20
+      '@types/node': 22.19.21
 
   '@types/ms@2.1.0': {}
 
@@ -4333,7 +4336,11 @@ snapshots:
     dependencies:
       undici-types: 6.21.0
 
-  '@types/node@25.9.3':
+  '@types/node@22.19.21':
+    dependencies:
+      undici-types: 6.21.0
+
+  '@types/node@25.9.4':
     dependencies:
       undici-types: 7.24.6
 
@@ -4365,12 +4372,12 @@ snapshots:
 
   '@types/send@1.2.1':
     dependencies:
-      '@types/node': 22.19.20
+      '@types/node': 22.19.21
 
   '@types/serve-static@2.2.0':
     dependencies:
       '@types/http-errors': 2.0.5
-      '@types/node': 22.19.20
+      '@types/node': 22.19.21
 
   '@types/validator@13.15.10': {}
 
@@ -5161,7 +5168,7 @@ snapshots:
 
   jest-worker@27.5.1:
     dependencies:
-      '@types/node': 22.19.20
+      '@types/node': 22.19.21
       merge-stream: 2.0.0
       supports-color: 8.1.1
 

@@ -15,7 +15,7 @@
     "setup": "bash scripts/dev-setup.sh"
   },
   "devDependencies": {
-    "@types/node": "^25.9.3",
+    "@types/node": "^25.9.4",
     "prettier": "^3.4.0",
     "turbo": "^2.9.16",
     "typescript": "^5.7.0"

@@ -98,9 +98,13 @@ Backend env validation uses Zod in `apps/backend/src/config/configuration.ts` â€
 ### Creating demo data
 
 ```bash
+
 # Creating demo data
 pnpm db:demo
+```
+# Creates 10 Accounts
 
+```bash
 #Creating demo data while specifiy directory
 pnpm --filter @gamers-sg/database db:demo
 ```

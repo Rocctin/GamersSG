@@ -143,10 +143,10 @@ async function main() {
         status: AccountStatus.APPROVED,
       },
     });
-    console.log(`  ✅ Admin: ${adminEmail}`);
+    console.log(`Admin: ${adminEmail}`);
     created++;
   } else {
-    console.log(`  ⏭️  Admin: ${adminEmail} (already exists)`);
+    console.log(`Admin: ${adminEmail} (already exists)`);
     skipped++;
   }
 
@@ -159,7 +159,7 @@ async function main() {
     });
 
     if (existing) {
-      console.log(`  ⏭️  ${gamer.username} (${gamer.email}) — already exists`);
+      console.log(`${gamer.username} (${gamer.email}) — already exists`);
       skipped++;
       continue;
     }
@@ -183,7 +183,7 @@ async function main() {
     });
 
     console.log(
-      `  ✅ ${gamer.username} (${gamer.email}) — ${gamer.isMember ? "Member" : "Free"}, ${gamer.pointsBalance} pts`,
+      `${gamer.username} (${gamer.email}) — ${gamer.isMember ? "Member" : "Free"}, ${gamer.pointsBalance} pts`,
     );
     created++;
   }
@@ -202,12 +202,12 @@ async function main() {
         : existing.status === AccountStatus.PENDING
           ? "PENDING"
           : "REJECTED";
-      console.log(`  ⏭️  ${org.organisationName} (${org.email}) — ${statusLabel} — already exists`);
+      console.log(`${org.organisationName} (${org.email}) — ${statusLabel} — already exists`);
       skipped++;
       continue;
     }
 
-    // For organiser profiles, we create the user + profile together
+    // For organiser profiles, create the user & profile together
     // and set the status directly (bypassing the PENDING flow for approved orgs)
     await prisma.user.create({
       data: {
@@ -233,7 +233,7 @@ async function main() {
         ? "PENDING"
         : "REJECTED";
     console.log(
-      `  ✅ ${org.organisationName} (${org.email}) — ${statusLabel}`,
+      `${org.organisationName} (${org.email}) — ${statusLabel}`,
     );
     created++;
   }
@@ -246,7 +246,7 @@ async function main() {
   });
 
   if (existingSuspended) {
-    console.log(`  ⏭️  ${DEMO_SUSPENDED.username} (${DEMO_SUSPENDED.email}) — already exists`);
+    console.log(`${DEMO_SUSPENDED.username} (${DEMO_SUSPENDED.email}) — already exists`);
     skipped++;
   } else {
     await prisma.user.create({
@@ -268,19 +268,19 @@ async function main() {
     });
 
     console.log(
-      `  ✅ ${DEMO_SUSPENDED.username} (${DEMO_SUSPENDED.email}) — SUSPENDED`,
+      `${DEMO_SUSPENDED.username} (${DEMO_SUSPENDED.email}) — SUSPENDED`,
     );
     created++;
   }
 
-  // ── Summary ───────────────────────────
+  // Summary Report
   console.log("\n" + "=" .repeat(50));
   console.log(`  Created: ${created}  |  Skipped: ${skipped}  |  Total: ${created + skipped}`);
-  console.log("\n  📧 Demo login flow:");
+  console.log("\n Demo login flow:");
   console.log("    1. Go to http://localhost:3001/login");
   console.log("    2. Enter any demo email");
   console.log("    3. Check the backend console for the magic link URL");
-  console.log("\n  🔑 Demo accounts:");
+  console.log("\n Demo accounts:");
   console.log("    admin@gamers.sg          — ADMIN");
   console.log("    gamer1@demo.sg           — GAMER (member, 2500 pts)");
   console.log("    gamer2@demo.sg           — GAMER (member, 4200 pts)");
