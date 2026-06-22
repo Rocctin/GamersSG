@@ -64,6 +64,7 @@ pnpm db:generate    # prisma generate — regenerate Prisma Client after schema 
 pnpm db:push        # prisma db push — push schema to DB (no migration file)
 pnpm db:migrate     # prisma migrate dev — create + apply a named migration
 pnpm db:seed        # tsx prisma/seed.ts — seed admin user
+pnpm db:demo        # tsx prisma/demo-data.ts — seed 10 demo accounts for dev
 pnpm db:studio      # prisma studio — open Prisma Studio GUI
 pnpm db:reset       # prisma migrate reset — WARNING: deletes all data
 ```
@@ -197,6 +198,7 @@ On page load, `AuthProvider` calls `POST /api/auth/refresh` (which sends the `re
 src/app/
 ├── layout.tsx                      # Root: AuthProvider + Toaster, dark theme
 ├── page.tsx                        # Landing page
+├── about/page.tsx                  # Public about page (no route group, always accessible)
 ├── (auth)/                         # Public routes
 │   ├── login/page.tsx              # Email → magic link request
 │   └── verify/page.tsx             # Token verification from magic link URL
