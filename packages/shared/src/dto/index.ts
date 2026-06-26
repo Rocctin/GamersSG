@@ -15,3 +15,10 @@ export type {
 } from "./user.dto";
 
 export type { ReviewOrganiserDto, UpdateUserStatusDto } from "./admin.dto";
+
+export type {
+  GameDto,
+  CreateGameDto,
+  UpdateGameDto,
+  GameWithRoleDto,
+} from "./game.dto";

@@ -106,6 +106,27 @@ export default function ProfilePage() {
                 </p>
               </div>
             </div>
+            {user.gamerProfile.games &&
+              user.gamerProfile.games.length > 0 && (
+                <div>
+                  <p className="text-xs text-slate-500 mb-2">Games Played</p>
+                  <div className="flex flex-wrap gap-2">
+                    {user.gamerProfile.games.map((game) => (
+                      <span
+                        key={game.id}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-800 border border-surface-700 text-sm text-slate-200"
+                      >
+                        {game.name}
+                        {game.inGameRole && (
+                          <span className="text-brand-400 text-xs">
+                            ({game.inGameRole})
+                          </span>
+                        )}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
           </div>
         </div>
       )}

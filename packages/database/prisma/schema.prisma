@@ -146,8 +146,45 @@ model GamerProfile {
   created_at      DateTime @default(now()) @db.Timestamptz
   updated_at      DateTime @updatedAt @db.Timestamptz
 
+  games GamerProfileGame[]
+
   @@index([username])
   @@map("gamer_profiles")
+}
+
+// ─────────────────────────────────────────
+// GAMES LIBRARY
+// Platform-managed game library used across
+// profiles, teams, tournaments, and jobs.
+// Only admins can create/edit/disable games.
+// ─────────────────────────────────────────
+
+model Game {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String   @unique
+  slug        String   @unique
+  cover_image String?
+  category    String?
+  is_active   Boolean  @default(true)
+  created_at  DateTime @default(now()) @db.Timestamptz
+  updated_at  DateTime @updatedAt @db.Timestamptz
+
+  gamer_profiles GamerProfileGame[]
+
+  @@index([slug])
+  @@index([category])
+  @@map("games")
+}
+
+model GamerProfileGame {
+  profile_id   String  @db.Uuid
+  game_id      String  @db.Uuid
+  in_game_role String?
+  profile      GamerProfile @relation(fields: [profile_id], references: [id], onDelete: Cascade)
+  game         Game         @relation(fields: [game_id], references: [id], onDelete: Cascade)
+
+  @@id([profile_id, game_id])
+  @@map("gamer_profile_games")
 }
 
 // ─────────────────────────────────────────

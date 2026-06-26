@@ -15,6 +15,7 @@ import {
   Users,
   Building2,
   ClipboardList,
+  Swords,
 } from "lucide-react";
 
 interface NavItem {
@@ -36,6 +37,7 @@ const ADMIN_ITEMS: NavItem[] = [
   { label: "Users", href: "/admin/users", icon: Users, adminOnly: true },
   { label: "Organisers", href: "/admin/organisers", icon: Building2, adminOnly: true },
   { label: "Audit Logs", href: "/admin/audit-logs", icon: ClipboardList, adminOnly: true },
+  { label: "Games", href: "/admin/games", icon: Swords, adminOnly: true },
 ];
 
 function isActive(href: string, pathname: string): boolean {

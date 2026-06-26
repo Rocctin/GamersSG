@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Users, Building2, ClipboardList, ArrowRight } from "lucide-react";
+import { Users, Building2, ClipboardList, Swords, ArrowRight } from "lucide-react";
 
 const ADMIN_LINKS = [
   {
@@ -21,6 +21,12 @@ const ADMIN_LINKS = [
     description: "Review all admin actions for compliance and accountability.",
     href: "/admin/audit-logs",
     icon: ClipboardList,
+  },
+  {
+    label: "Games Library",
+    description: "Manage the platform game library. Add, edit, or disable games.",
+    href: "/admin/games",
+    icon: Swords,
   },
 ];
 

@@ -1,4 +1,5 @@
 import type { Role, AccountStatus } from "../enums";
+import type { GameWithRoleDto } from "./game.dto";
 
 export interface UserProfileDto {
   id: string;
@@ -19,6 +20,7 @@ export interface GamerProfileDto {
   visibility: string;
   isMember: boolean;
   pointsBalance: number;
+  games?: GameWithRoleDto[];
 }
 
 export interface OrganiserProfileDto {
@@ -37,6 +39,7 @@ export interface UpdateGamerProfileDto {
   bio?: string;
   avatarUrl?: string;
   visibility?: "PUBLIC" | "MEMBERS_ONLY" | "PRIVATE";
+  gameIds?: { gameId: string; inGameRole?: string }[];
 }
 
 export interface CreateOrganiserProfileDto {

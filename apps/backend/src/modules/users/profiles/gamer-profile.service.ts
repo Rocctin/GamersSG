@@ -67,6 +67,31 @@ export class GamerProfileService {
       },
     });
 
+    // Handle game selections
+    if (dto.gameIds !== undefined) {
+      // Clear existing game associations
+      await this.prisma.gamerProfileGame.deleteMany({
+        where: { profile_id: profile.id },
+      });
+
+      // Insert new game associations
+      if (dto.gameIds.length > 0) {
+        await this.prisma.gamerProfileGame.createMany({
+          data: dto.gameIds.map((g) => ({
+            profile_id: profile.id,
+            game_id: g.gameId,
+            in_game_role: g.inGameRole || null,
+          })),
+        });
+      }
+    }
+
+    // Fetch games for response
+    const gameEntries = await this.prisma.gamerProfileGame.findMany({
+      where: { profile_id: profile.id },
+      include: { game: true },
+    });
+
     return {
       id: updated.id,
       username: updated.username,
@@ -76,6 +101,14 @@ export class GamerProfileService {
       visibility: updated.visibility,
       isMember: updated.is_member,
       pointsBalance: updated.points_balance,
+      games: gameEntries.map((g) => ({
+        id: g.game.id,
+        name: g.game.name,
+        slug: g.game.slug,
+        coverImage: g.game.cover_image,
+        category: g.game.category,
+        inGameRole: g.in_game_role,
+      })),
     };
   }
 }

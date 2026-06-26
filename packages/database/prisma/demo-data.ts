@@ -150,6 +150,43 @@ async function main() {
     skipped++;
   }
 
+  // ── Games Library ────────────────────
+  console.log("\n  ── GAMES LIBRARY ──");
+
+  const DEMO_GAMES = [
+    { name: "Valorant", slug: "valorant", category: "FPS" },
+    { name: "Counter-Strike 2", slug: "counter-strike-2", category: "FPS" },
+    { name: "Overwatch 2", slug: "overwatch-2", category: "FPS" },
+    { name: "Rainbow Six Siege", slug: "rainbow-six-siege", category: "FPS" },
+    { name: "League of Legends", slug: "league-of-legends", category: "MOBA" },
+    { name: "Dota 2", slug: "dota-2", category: "MOBA" },
+    { name: "Mobile Legends: Bang Bang", slug: "mobile-legends-bang-bang", category: "MOBA" },
+    { name: "Apex Legends", slug: "apex-legends", category: "Battle Royale" },
+    { name: "Fortnite", slug: "fortnite", category: "Battle Royale" },
+    { name: "Call of Duty: Warzone", slug: "call-of-duty-warzone", category: "Battle Royale" },
+    { name: "Street Fighter 6", slug: "street-fighter-6", category: "Fighting" },
+    { name: "Tekken 8", slug: "tekken-8", category: "Fighting" },
+    { name: "Super Smash Bros. Ultimate", slug: "super-smash-bros-ultimate", category: "Fighting" },
+    { name: "EA Sports FC", slug: "ea-sports-fc", category: "Sports" },
+    { name: "NBA 2K", slug: "nba-2k", category: "Sports" },
+    { name: "Genshin Impact", slug: "genshin-impact", category: "RPG" },
+    { name: "Final Fantasy XIV", slug: "final-fantasy-xiv", category: "RPG" },
+    { name: "Minecraft", slug: "minecraft", category: "Sandbox" },
+    { name: "Rocket League", slug: "rocket-league", category: "Sports" },
+  ];
+
+  for (const game of DEMO_GAMES) {
+    const existing = await prisma.game.findUnique({ where: { slug: game.slug } });
+    if (existing) {
+      console.log(`${game.name} — already exists`);
+      skipped++;
+      continue;
+    }
+    await prisma.game.create({ data: game });
+    console.log(`${game.name} (${game.category})`);
+    created++;
+  }
+
   // ── Gamers ────────────────────────────
   console.log("\n  ── GAMERS ──");
 
@@ -271,6 +308,72 @@ async function main() {
       `${DEMO_SUSPENDED.username} (${DEMO_SUSPENDED.email}) — SUSPENDED`,
     );
     created++;
+  }
+
+  // ── Game Assignments ────────────────
+  console.log("\n  ── GAME ASSIGNMENTS ──");
+
+  const DEMO_GAME_ASSIGNMENTS: Record<
+    string,
+    { slug: string; inGameRole?: string }[]
+  > = {
+    shadowblade: [
+      { slug: "valorant", inGameRole: "Duelist" },
+      { slug: "counter-strike-2", inGameRole: "AWPer" },
+      { slug: "apex-legends", inGameRole: "Fragger" },
+    ],
+    pixelwitch: [
+      { slug: "minecraft", inGameRole: "Crafter" },
+      { slug: "genshin-impact", inGameRole: "Explorer" },
+    ],
+    dragonlord: [
+      { slug: "dota-2", inGameRole: "Mid" },
+      { slug: "league-of-legends", inGameRole: "Jungle" },
+      { slug: "mobile-legends-bang-bang", inGameRole: "Roamer" },
+    ],
+    neonstriker: [
+      { slug: "street-fighter-6", inGameRole: "Main" },
+      { slug: "tekken-8", inGameRole: "Sub" },
+      { slug: "super-smash-bros-ultimate" },
+    ],
+    lunarmage: [
+      { slug: "final-fantasy-xiv", inGameRole: "Healer" },
+      { slug: "genshin-impact", inGameRole: "Explorer" },
+      { slug: "rocket-league", inGameRole: "Casual" },
+    ],
+  };
+
+  for (const [username, gameList] of Object.entries(DEMO_GAME_ASSIGNMENTS)) {
+    const profile = await prisma.gamerProfile.findUnique({
+      where: { username },
+    });
+    if (!profile) {
+      console.log(`${username} — profile not found, skipping`);
+      continue;
+    }
+
+    const gameSlugs = gameList.map((g) => g.slug);
+    const games = await prisma.game.findMany({
+      where: { slug: { in: gameSlugs } },
+    });
+    const gameBySlug = new Map(games.map((g) => [g.slug, g.id]));
+
+    const data = gameList
+      .filter((g) => gameBySlug.has(g.slug))
+      .map((g) => ({
+        profile_id: profile.id,
+        game_id: gameBySlug.get(g.slug)!,
+        in_game_role: g.inGameRole || null,
+      }));
+
+    if (data.length > 0) {
+      await prisma.gamerProfileGame.createMany({ data });
+      const assigned = data.map((d) => {
+        const slug = games.find((g) => g.id === d.game_id)?.slug;
+        return `${slug}${d.in_game_role ? ` (${d.in_game_role})` : ""}`;
+      });
+      console.log(`${username} → ${assigned.join(", ")}`);
+    }
   }
 
   // Summary Report

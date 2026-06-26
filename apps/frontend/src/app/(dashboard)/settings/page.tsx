@@ -1,10 +1,45 @@
 "use client";
 
+import { useState, useCallback } from "react";
 import { useAuth } from "@/hooks/use-auth";
-import { Bell, Shield, Palette } from "lucide-react";
+import { Bell, Shield, Palette, Gamepad2 } from "lucide-react";
+import { GameSelector } from "@/components/games/game-selector";
+import apiClient from "@/lib/api-client";
+import { toast } from "sonner";
 
 export default function SettingsPage() {
-  const { user } = useAuth();
+  const { user, refreshSession } = useAuth();
+  const [savedGames, setSavedGames] = useState<
+    { gameId: string; inGameRole?: string }[]
+  >(user?.gamerProfile?.games?.map((g) => ({
+    gameId: g.id,
+    inGameRole: g.inGameRole,
+  })) ?? []);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleGamesChange = useCallback(
+    (games: { gameId: string; inGameRole?: string }[]) => {
+      setSavedGames(games);
+    },
+    [],
+  );
+
+  const handleSaveGames = async () => {
+    setIsSaving(true);
+    try {
+      await apiClient.put("/users/me/profile", {
+        gameIds: savedGames,
+      });
+      toast.success("Games saved successfully");
+      await refreshSession();
+    } catch (err: any) {
+      toast.error(
+        err.response?.data?.error?.message || "Failed to save games",
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   return (
     <div className="space-y-6 max-w-2xl">
@@ -14,6 +49,32 @@ export default function SettingsPage() {
           Manage your account preferences and notifications.
         </p>
       </div>
+
+      {/* My Games */}
+      {user?.gamerProfile && (
+        <div className="bg-surface-900 border border-surface-800 rounded-xl overflow-hidden">
+          <div className="flex items-center gap-3 p-6 border-b border-surface-800">
+            <div className="w-8 h-8 rounded-lg bg-brand-500/10 border border-brand-500/20 flex items-center justify-center">
+              <Gamepad2 className="h-4 w-4 text-brand-500" />
+            </div>
+            <h2 className="text-lg font-semibold text-slate-100">My Games</h2>
+          </div>
+          <div className="p-6 space-y-4">
+            <GameSelector
+              selected={savedGames}
+              onChange={handleGamesChange}
+            />
+            <button
+              type="button"
+              onClick={handleSaveGames}
+              disabled={isSaving}
+              className="inline-flex items-center gap-2 bg-brand-500 hover:bg-brand-600 disabled:bg-surface-700 disabled:text-slate-500 disabled:cursor-not-allowed text-white font-semibold px-5 py-2.5 rounded-lg transition-all duration-200 text-sm"
+            >
+              {isSaving ? "Saving..." : "Save Games"}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Notifications */}
       <div className="bg-surface-900 border border-surface-800 rounded-xl overflow-hidden">

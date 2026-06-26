@@ -220,7 +220,13 @@ export class AuthService {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       include: {
-        gamer_profile: true,
+        gamer_profile: {
+          include: {
+            games: {
+              include: { game: true },
+            },
+          },
+        },
         organiser_profile: true,
       },
     });
@@ -250,6 +256,14 @@ export class AuthService {
             visibility: user.gamer_profile.visibility,
             isMember: user.gamer_profile.is_member,
             pointsBalance: user.gamer_profile.points_balance,
+            games: user.gamer_profile.games?.map((g: any) => ({
+              id: g.game.id,
+              name: g.game.name,
+              slug: g.game.slug,
+              coverImage: g.game.cover_image,
+              category: g.game.category,
+              inGameRole: g.in_game_role,
+            })),
           }
         : undefined,
       organiserProfile: user.organiser_profile
