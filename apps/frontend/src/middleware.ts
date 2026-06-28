@@ -19,11 +19,13 @@ interface JwtClaims {
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Only protect dashboard and admin routes
+  // Only protect dashboard, admin, organiser, profile, and settings routes
   const isProtectedRoute =
     pathname.startsWith("/dashboard") ||
     pathname.startsWith("/profile") ||
     pathname.startsWith("/settings") ||
+    pathname.startsWith("/organiser") ||
+    pathname.startsWith("/become-organiser") ||
     pathname.startsWith("/admin");
 
   if (!isProtectedRoute) {
@@ -67,6 +69,8 @@ export const config = {
     "/dashboard/:path*",
     "/profile/:path*",
     "/settings/:path*",
+    "/organiser/:path*",
+    "/become-organiser/:path*",
     "/admin/:path*",
   ],
 };

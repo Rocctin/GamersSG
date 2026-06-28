@@ -84,17 +84,20 @@ export class AdminService {
       );
     }
 
-    const newStatus =
-      dto.action === "APPROVE" ? AccountStatus.APPROVED : AccountStatus.REJECTED;
-    const auditAction =
-      dto.action === "APPROVE"
-        ? AuditAction.ORGANISER_APPROVED
-        : AuditAction.ORGANISER_REJECTED;
+    const isApproved = dto.action === "APPROVE";
+    const newStatus = isApproved ? AccountStatus.APPROVED : AccountStatus.REJECTED;
+    const auditAction = isApproved
+      ? AuditAction.ORGANISER_APPROVED
+      : AuditAction.ORGANISER_REJECTED;
 
     await this.prisma.$transaction([
       this.prisma.user.update({
         where: { id: targetUserId },
-        data: { status: newStatus },
+        data: {
+          status: newStatus,
+          // Upgrade role to ORGANISER on approval; keep as GAMER on rejection
+          ...(isApproved && { role: "ORGANISER" }),
+        },
       }),
       this.prisma.organiserProfile.update({
         where: { user_id: targetUserId },
@@ -111,7 +114,14 @@ export class AdminService {
       action: auditAction,
       targetId: targetUserId,
       targetType: "organiser",
-      metadata: { action: dto.action, reason: dto.rejectionReason },
+      metadata: {
+        action: dto.action,
+        reason: dto.rejectionReason,
+        ...(isApproved && {
+          previousRole: organiserProfile.user.role,
+          newRole: "ORGANISER",
+        }),
+      },
       ipAddress,
     });
 
@@ -184,6 +194,7 @@ export class AdminService {
   ) {
     const targetUser = await this.prisma.user.findUnique({
       where: { id: targetUserId },
+      include: { organiser_profile: true },
     });
 
     if (!targetUser) {
@@ -207,10 +218,27 @@ export class AdminService {
       });
     }
 
-    const auditAction =
-      dto.status === "SUSPENDED"
-        ? AuditAction.USER_SUSPENDED
-        : AuditAction.ORGANISER_REINSTATED;
+    // Map status change to the correct audit action
+    let auditAction: AuditAction;
+    if (dto.status === "SUSPENDED") {
+      auditAction = AuditAction.USER_SUSPENDED;
+    } else if (targetUser.organiser_profile) {
+      // Use organiser-specific actions for users with an organiser profile
+      if (dto.status === "APPROVED") {
+        auditAction =
+          targetUser.status === "SUSPENDED"
+            ? AuditAction.ORGANISER_REINSTATED
+            : AuditAction.ORGANISER_APPROVED;
+      } else if (dto.status === "REJECTED") {
+        auditAction = AuditAction.ORGANISER_REJECTED;
+      } else {
+        // PENDING or other — reset for re-review
+        auditAction = AuditAction.USER_STATUS_CHANGED;
+      }
+    } else {
+      // Non-organiser users: use generic status change action
+      auditAction = AuditAction.USER_STATUS_CHANGED;
+    }
 
     await this.auditService.log({
       actorId: adminId,
@@ -247,7 +275,7 @@ export class AdminService {
 
     const data = logs.map((l) => ({
       id: l.id,
-      actorEmail: l.actor.email,
+      actorEmail: l.actor?.email ?? null,
       targetEmail: l.target?.email ?? null,
       action: l.action,
       targetType: l.target_type,

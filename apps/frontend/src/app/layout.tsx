@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { AuthProvider } from "@/lib/auth-context";
 import { Toaster } from "sonner";
-import "@/styles/globals.css";
+import '@/styles/globals.css';
 
 export const metadata: Metadata = {
   title: "Gamers.SG — Singapore's Gaming Identity Platform",

@@ -83,7 +83,7 @@ const DEMO_ORGANISERS: DemoOrganiser[] = [
     organisationType: "Association",
     website: "https://sel.sg",
     contactPerson: "Alex Tan",
-    contactNumber: "+65 9123 4567",
+    contactNumber: "+65 1234 4567",
     description:
       "The Singapore Esports League (SEL) organises competitive gaming tournaments across multiple titles including Valorant, League of Legends, and Mobile Legends. We run seasonal leagues and major LAN events.",
   },
@@ -94,7 +94,7 @@ const DEMO_ORGANISERS: DemoOrganiser[] = [
     organisationType: "School",
     website: "https://nyp.edu.sg/gaming",
     contactPerson: "Sarah Lim",
-    contactNumber: "+65 9876 5432",
+    contactNumber: "+65 1233 4322",
     description:
       "NYP Gaming Club brings together students passionate about esports and competitive gaming. We host internal tournaments, viewing parties, and workshops on game design and shoutcasting.",
   },
@@ -105,7 +105,7 @@ const DEMO_ORGANISERS: DemoOrganiser[] = [
     organisationType: "Company",
     website: "https://sketchy-tournaments.biz",
     contactPerson: "John Doe",
-    contactNumber: "+65 8000 0000",
+    contactNumber: "+65 1222 2212",
     description:
       "We run totally legitimate tournaments with guaranteed prize pools. Trust us.",
   },

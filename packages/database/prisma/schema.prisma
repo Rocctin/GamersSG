@@ -39,6 +39,7 @@ enum AuditAction {
   // User management
   USER_SUSPENDED
   USER_DELETED
+  USER_STATUS_CHANGED
 
   // Auth events
   MAGIC_LINK_SENT
@@ -49,6 +50,45 @@ enum AuditAction {
   // Points (Phase 4)
   POINTS_AWARDED
   POINTS_DEDUCTED
+
+  // Tournaments & Events
+  TOURNAMENT_CREATED
+  TOURNAMENT_APPROVED
+  TOURNAMENT_REJECTED
+  TOURNAMENT_CANCELLED
+  EVENT_CREATED
+  EVENT_APPROVED
+  EVENT_REJECTED
+  EVENT_CANCELLED
+}
+
+enum TournamentFormat {
+  BEST_OF_ONE
+  BEST_OF_THREE
+  OTHER
+}
+
+enum TournamentStatus {
+  DRAFT
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+  ONGOING
+  COMPLETED
+  CANCELLED
+}
+
+enum EventType {
+  PHYSICAL
+  DIGITAL
+  HYBRID
+}
+
+enum RegistrationStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  ATTENDED
 }
 
 // ─────────────────────────────────────────
@@ -72,12 +112,16 @@ model User {
   updated_at  DateTime      @updatedAt @db.Timestamptz
 
   // Relations
-  organiser_profile  OrganiserProfile?
-  gamer_profile      GamerProfile?
-  auth_tokens        AuthToken[]
-  refresh_tokens     RefreshToken[]
-  audit_logs_actor   AuditLog[]        @relation("AuditActor")
-  audit_logs_target  AuditLog[]        @relation("AuditTarget")
+  organiser_profile       OrganiserProfile?
+  gamer_profile           GamerProfile?
+  auth_tokens             AuthToken[]
+  refresh_tokens          RefreshToken[]
+  audit_logs_actor        AuditLog[]        @relation("AuditActor")
+  audit_logs_target       AuditLog[]        @relation("AuditTarget")
+  organised_tournaments   Tournament[]      @relation("TournamentOrganiser")
+  tournament_registrations TournamentRegistration[]
+  organised_events        Event[]           @relation("EventOrganiser")
+  event_registrations     EventRegistration[]
 
   @@index([email])
   @@index([role, status])
@@ -170,6 +214,7 @@ model Game {
   updated_at  DateTime @updatedAt @db.Timestamptz
 
   gamer_profiles GamerProfileGame[]
+  tournaments    Tournament[]
 
   @@index([slug])
   @@index([category])
@@ -185,6 +230,126 @@ model GamerProfileGame {
 
   @@id([profile_id, game_id])
   @@map("gamer_profile_games")
+}
+
+// ─────────────────────────────────────────
+// TOURNAMENTS
+// Competitive tournament listings created by organisers.
+// ─────────────────────────────────────────
+
+model Tournament {
+  id                  String           @id @default(uuid()) @db.Uuid
+  name                String
+  description         String           @db.Text
+  game_id             String           @db.Uuid
+  game                Game             @relation(fields: [game_id], references: [id])
+  format              TournamentFormat @default(OTHER)
+  platform            String?
+  registration_start  DateTime         @db.Timestamptz
+  registration_end    DateTime         @db.Timestamptz
+  tournament_start    DateTime         @db.Timestamptz
+  tournament_end      DateTime         @db.Timestamptz
+  is_online           Boolean          @default(false)
+  venue               String?
+  is_team_based       Boolean          @default(false)
+  max_participants    Int?
+  prize_pool          String?
+  registration_fee    Float?           @db.DoublePrecision
+  ruleset_url         String?
+  organiser_id        String           @db.Uuid
+  organiser           User             @relation("TournamentOrganiser", fields: [organiser_id], references: [id])
+  status              TournamentStatus @default(DRAFT)
+
+  // Admin review
+  reviewed_by     String?   @db.Uuid
+  reviewed_at     DateTime? @db.Timestamptz
+  rejection_reason String?  @db.Text
+
+  created_at  DateTime @default(now()) @db.Timestamptz
+  updated_at  DateTime @updatedAt @db.Timestamptz
+
+  registrations TournamentRegistration[]
+
+  @@index([status])
+  @@index([organiser_id])
+  @@index([game_id])
+  @@index([tournament_start])
+  @@map("tournaments")
+}
+
+model TournamentRegistration {
+  id            String             @id @default(uuid()) @db.Uuid
+  tournament_id String             @db.Uuid
+  tournament    Tournament         @relation(fields: [tournament_id], references: [id], onDelete: Cascade)
+  user_id       String             @db.Uuid
+  user          User               @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  team_id       String?            @db.Uuid
+  status        RegistrationStatus @default(PENDING)
+  registered_at DateTime           @default(now()) @db.Timestamptz
+  checked_in_at DateTime?          @db.Timestamptz
+
+  @@unique([tournament_id, user_id])
+  @@index([user_id])
+  @@index([status])
+  @@map("tournament_registrations")
+}
+
+// ─────────────────────────────────────────
+// EVENTS
+// Community event listings created by organisers.
+// ─────────────────────────────────────────
+
+model Event {
+  id                  String           @id @default(uuid()) @db.Uuid
+  name                String
+  description         String           @db.Text
+  event_type          EventType        @default(DIGITAL)
+  access_type         String           @default("PUBLIC")
+  capacity            Int?
+  registration_start  DateTime         @db.Timestamptz
+  registration_end    DateTime         @db.Timestamptz
+  event_start         DateTime         @db.Timestamptz
+  event_end           DateTime         @db.Timestamptz
+  venue               String?
+  is_online           Boolean          @default(false)
+  age_restrictions    String?
+  registration_fee    Float?           @db.DoublePrecision
+  points_awarded      Int              @default(0)
+  organiser_id        String           @db.Uuid
+  organiser           User             @relation("EventOrganiser", fields: [organiser_id], references: [id])
+  status              TournamentStatus @default(DRAFT)
+
+  // Admin review
+  reviewed_by     String?   @db.Uuid
+  reviewed_at     DateTime? @db.Timestamptz
+  rejection_reason String?  @db.Text
+
+  created_at  DateTime @default(now()) @db.Timestamptz
+  updated_at  DateTime @updatedAt @db.Timestamptz
+
+  registrations EventRegistration[]
+
+  @@index([status])
+  @@index([organiser_id])
+  @@index([event_type])
+  @@index([event_start])
+  @@map("events")
+}
+
+model EventRegistration {
+  id            String             @id @default(uuid()) @db.Uuid
+  event_id      String             @db.Uuid
+  event         Event              @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  user_id       String             @db.Uuid
+  user          User               @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  status        RegistrationStatus @default(PENDING)
+  registered_at DateTime           @default(now()) @db.Timestamptz
+  checked_in_at DateTime?          @db.Timestamptz
+
+  @@unique([event_id, user_id])
+  @@index([user_id])
+  @@index([status])
+  @@map("event_registrations")
 }
 
 // ─────────────────────────────────────────

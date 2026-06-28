@@ -22,3 +22,21 @@ export type {
   UpdateGameDto,
   GameWithRoleDto,
 } from "./game.dto";
+
+export type {
+  TournamentDto,
+  CreateTournamentDto,
+  UpdateTournamentDto,
+  TournamentRegistrationDto,
+  CreateTournamentRegistrationDto,
+  TournamentFilterDto,
+} from "./tournament.dto";
+
+export type {
+  EventDto,
+  CreateEventDto,
+  UpdateEventDto,
+  EventRegistrationDto,
+  CreateEventRegistrationDto,
+  EventFilterDto,
+} from "./event.dto";

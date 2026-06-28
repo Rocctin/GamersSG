@@ -231,11 +231,15 @@ export class AuthService {
       },
     });
 
+    if (!user) {
+      throw new UnauthorizedException("User account not found");
+    }
+
     return {
       accessToken,
       refreshToken: refreshTokenRaw,
       expiresIn: 900, // 15 minutes in seconds
-      user: this.mapUserToProfile(user!),
+      user: this.mapUserToProfile(user),
     };
   }
 

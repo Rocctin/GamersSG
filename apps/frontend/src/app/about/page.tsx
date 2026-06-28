@@ -114,9 +114,9 @@ export default function AboutPage() {
                 Our Vision
               </h3>
               <p className="text-slate-400 text-sm leading-relaxed">
-                To be the single source of truth for gaming identity in
-                Singapore — where every gamer has one verified profile that
-                follows them across teams, tournaments, and career
+                To be the main source of networking & connecting for gaming identity in
+                Singapore, where every gamer has one verified profile that
+                follows them across teams, tournaments, and perhaps career
                 opportunities.
               </p>
             </div>

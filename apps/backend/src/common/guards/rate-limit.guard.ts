@@ -47,10 +47,11 @@ export class RateLimitGuard implements CanActivate {
     const now = new Date();
     const windowStart = new Date(now.getTime() - windowMinutes * 60 * 1000);
 
-    // Upsert rate limit bucket — reset if window expired, increment if within
+    // Atomic upsert — increments count in a single DB operation, eliminating
+    // the read-then-write race that would let concurrent requests bypass the limit.
     const bucket = await this.prisma.rateLimitBucket.upsert({
       where: { key },
-      update: {},
+      update: { count: { increment: 1 } },
       create: {
         key,
         count: 1,
@@ -60,7 +61,8 @@ export class RateLimitGuard implements CanActivate {
 
     // Check if window has expired
     if (bucket.window_start < windowStart) {
-      // Reset window
+      // Reset window (minor race acceptable here — worst case one extra
+      // request slips through during a window rollover)
       await this.prisma.rateLimitBucket.update({
         where: { key },
         data: {
@@ -71,8 +73,9 @@ export class RateLimitGuard implements CanActivate {
       return true;
     }
 
-    // Check if over limit
-    if (bucket.count >= maxAttempts) {
+    // Check if over limit — use > (not >=) because the upsert already
+    // atomically incremented the count
+    if (bucket.count > maxAttempts) {
       const retryAfter = Math.ceil(
         (bucket.window_start.getTime() +
           windowMinutes * 60 * 1000 -
@@ -88,12 +91,6 @@ export class RateLimitGuard implements CanActivate {
         HttpStatus.TOO_MANY_REQUESTS,
       );
     }
-
-    // Increment count
-    await this.prisma.rateLimitBucket.update({
-      where: { key },
-      data: { count: bucket.count + 1 },
-    });
 
     return true;
   }

@@ -4,15 +4,19 @@ import {
   BadRequestException,
 } from "@nestjs/common";
 import { PrismaService } from "../../../prisma/prisma.service";
+import { AuditService } from "../../audit/audit.service";
 import type {
   CreateOrganiserProfileDto,
   UpdateOrganiserProfileDto,
 } from "@gamers-sg/shared/dto";
-import { AccountStatus } from "@gamers-sg/database";
+import { AccountStatus, AuditAction } from "@gamers-sg/database";
 
 @Injectable()
 export class OrganiserProfileService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditService: AuditService,
+  ) {}
 
   async createProfile(userId: string, dto: CreateOrganiserProfileDto) {
     // Check user exists and has ORGANISER role
@@ -53,6 +57,78 @@ export class OrganiserProfileService {
     await this.prisma.user.update({
       where: { id: userId },
       data: { status: AccountStatus.PENDING },
+    });
+
+    return {
+      id: profile.id,
+      organisationName: profile.organisation_name,
+      organisationType: profile.organisation_type,
+      website: profile.website,
+      contactPerson: profile.contact_person,
+      contactNumber: profile.contact_number,
+      description: profile.description,
+    };
+  }
+
+  async applyForOrganiser(
+    userId: string,
+    dto: CreateOrganiserProfileDto,
+    ipAddress?: string,
+  ) {
+    // Fetch user with profile to validate eligibility
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { organiser_profile: true },
+    });
+
+    if (!user) {
+      throw new BadRequestException("User not found");
+    }
+
+    // Only GAMER users can apply to become organisers
+    if (user.role !== "GAMER") {
+      throw new BadRequestException("Only gamers can apply to become an organiser");
+    }
+
+    // Prevent duplicate applications
+    if (user.organiser_profile) {
+      throw new ConflictException(
+        "You already have an organiser profile. If your application was rejected, update your profile to resubmit for review.",
+      );
+    }
+
+    // Create profile and set status to PENDING (role stays GAMER until admin approval)
+    const profile = await this.prisma.organiserProfile.create({
+      data: {
+        user_id: userId,
+        organisation_name: dto.organisationName,
+        organisation_type: dto.organisationType,
+        website: dto.website,
+        contact_person: dto.contactPerson,
+        contact_number: dto.contactNumber,
+        description: dto.description,
+      },
+    });
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { status: AccountStatus.PENDING },
+    });
+
+    // Audit log
+    await this.auditService.log({
+      actorId: userId,
+      action: AuditAction.USER_STATUS_CHANGED,
+      targetId: userId,
+      targetType: "user",
+      metadata: {
+        previousStatus: user.status,
+        newStatus: "PENDING",
+        trigger: "organiser_application",
+        organisationName: dto.organisationName,
+        organisationType: dto.organisationType,
+      },
+      ipAddress,
     });
 
     return {

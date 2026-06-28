@@ -96,12 +96,22 @@ apiClient.interceptors.response.use(
         originalRequest.headers.Authorization = `Bearer ${accessToken}`;
         return apiClient(originalRequest);
       } catch (refreshError) {
-        processQueue(refreshError, null);
-        accessToken = null;
-        // Redirect to login
-        if (typeof window !== "undefined") {
-          window.location.href = "/login";
+        // Only treat the session as lost if the refresh endpoint explicitly
+        // returned 401 (token revoked/expired). Transient network failures
+        // and server errors should not force a logout.
+        const isAuthFailure =
+          axios.isAxiosError(refreshError) &&
+          refreshError.response?.status === 401;
+
+        if (isAuthFailure) {
+          accessToken = null;
+          if (typeof window !== "undefined") {
+            window.location.href = "/login";
+          }
         }
+
+        // Reject queued requests — callers can retry after a network error
+        processQueue(refreshError, null);
         return Promise.reject(refreshError);
       } finally {
         isRefreshing = false;
@@ -113,3 +123,9 @@ apiClient.interceptors.response.use(
 );
 
 export default apiClient;
+
+// Public client — no auth header, no 401 refresh (used for public browse pages)
+export const apiPublic = axios.create({
+  baseURL: API_URL,
+  headers: { "Content-Type": "application/json" },
+});

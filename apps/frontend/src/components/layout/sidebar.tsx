@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
-import { isAdmin } from "@/lib/auth";
+import { isAdmin, isOrganiser } from "@/lib/auth";
 import {
   Gamepad2,
   X,
@@ -16,6 +16,9 @@ import {
   Building2,
   ClipboardList,
   Swords,
+  Calendar,
+  Trophy,
+  UserPlus,
 } from "lucide-react";
 
 interface NavItem {
@@ -37,6 +40,8 @@ const ADMIN_ITEMS: NavItem[] = [
   { label: "Users", href: "/admin/users", icon: Users, adminOnly: true },
   { label: "Organisers", href: "/admin/organisers", icon: Building2, adminOnly: true },
   { label: "Audit Logs", href: "/admin/audit-logs", icon: ClipboardList, adminOnly: true },
+  { label: "Tournaments", href: "/admin/tournaments", icon: Trophy, adminOnly: true },
+  { label: "Events", href: "/admin/events", icon: Calendar, adminOnly: true },
   { label: "Games", href: "/admin/games", icon: Swords, adminOnly: true },
 ];
 
@@ -49,6 +54,7 @@ export function Sidebar({ onClose }: { onClose: () => void }) {
   const pathname = usePathname();
   const { user } = useAuth();
   const showAdmin = isAdmin(user);
+  const showOrganiser = isOrganiser(user);
 
   return (
     <nav className="flex flex-col h-full">
@@ -96,6 +102,73 @@ export function Sidebar({ onClose }: { onClose: () => void }) {
             );
           })}
         </div>
+
+        {/* Become Organiser — shown to gamers who haven't applied yet */}
+        {user?.role === "GAMER" && !user?.organiserProfile && (
+          <div className="mt-6">
+            <Link
+              href="/become-organiser"
+              onClick={onClose}
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                isActive("/become-organiser", pathname)
+                  ? "bg-brand-500/10 text-brand-500 border border-brand-500/20"
+                  : "text-slate-300 hover:text-slate-100 hover:bg-surface-800"
+              }`}
+            >
+              <UserPlus className="h-4 w-4" />
+              Become an Organiser
+            </Link>
+          </div>
+        )}
+
+        {/* Organiser section */}
+        {showOrganiser && (
+          <>
+            <div className="mt-6 mb-2 px-3">
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                Organiser Portal
+              </span>
+            </div>
+            <div className="space-y-1">
+              <Link
+                href="/organiser"
+                onClick={onClose}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                  isActive("/organiser", pathname)
+                    ? "bg-brand-500/10 text-brand-500 border border-brand-500/20"
+                    : "text-slate-300 hover:text-slate-100 hover:bg-surface-800"
+                }`}
+              >
+                <Building2 className="h-4 w-4" />
+                Organiser Portal
+              </Link>
+              <Link
+                href="/organiser/tournaments"
+                onClick={onClose}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                  isActive("/organiser/tournaments", pathname)
+                    ? "bg-brand-500/10 text-brand-500 border border-brand-500/20"
+                    : "text-slate-300 hover:text-slate-100 hover:bg-surface-800"
+                }`}
+              >
+                <Swords className="h-4 w-4" />
+                Tournaments
+              </Link>
+              <Link
+                href="/organiser/events"
+                onClick={onClose}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                  isActive("/organiser/events", pathname)
+                    ? "bg-brand-500/10 text-brand-500 border border-brand-500/20"
+                    : "text-slate-300 hover:text-slate-100 hover:bg-surface-800"
+                }`}
+              >
+                <Calendar className="h-4 w-4" />
+                Events
+              </Link>
+            </div>
+          </>
+        )}
 
         {/* Admin section */}
         {showAdmin && (

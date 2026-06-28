@@ -5,10 +5,12 @@ import {
   Post,
   Body,
   Param,
+  Req,
   HttpCode,
   HttpStatus,
   UseGuards,
 } from "@nestjs/common";
+import type { Request } from "express";
 import { UsersService } from "./users.service";
 import { GamerProfileService } from "./profiles/gamer-profile.service";
 import { OrganiserProfileService } from "./profiles/organiser-profile.service";
@@ -46,6 +48,21 @@ export class UsersController {
     @Body() dto: UpdateGamerProfileDto,
   ) {
     return this.gamerProfileService.updateProfile(user.sub, dto);
+  }
+
+  @Post("me/apply-organiser")
+  @HttpCode(HttpStatus.CREATED)
+  @Roles(Role.GAMER)
+  async applyForOrganiser(
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: CreateOrganiserProfileDto,
+    @Req() req: Request,
+  ) {
+    return this.organiserProfileService.applyForOrganiser(
+      user.sub,
+      dto,
+      req.ip,
+    );
   }
 
   @Post("me/organiser-profile")

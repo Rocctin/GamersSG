@@ -21,7 +21,7 @@ export class EmailService {
 
     // Always log the magic link in development
     if (this.configService.get<string>("NODE_ENV") === "development") {
-      this.logger.log(`🔗 Magic link for ${email}: ${magicLink}`);
+      this.logger.log(`Magic link for ${email}: ${magicLink}`);
     }
 
     try {
