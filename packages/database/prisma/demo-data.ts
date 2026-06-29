@@ -358,8 +358,21 @@ async function main() {
     });
     const gameBySlug = new Map(games.map((g) => [g.slug, g.id]));
 
+    // Check which game assignments already exist for this profile
+    const existingGameIds = new Set(
+      (
+        await prisma.gamerProfileGame.findMany({
+          where: {
+            profile_id: profile.id,
+            game_id: { in: games.map((g) => g.id) },
+          },
+          select: { game_id: true },
+        })
+      ).map((r) => r.game_id),
+    );
+
     const data = gameList
-      .filter((g) => gameBySlug.has(g.slug))
+      .filter((g) => gameBySlug.has(g.slug) && !existingGameIds.has(gameBySlug.get(g.slug)!))
       .map((g) => ({
         profile_id: profile.id,
         game_id: gameBySlug.get(g.slug)!,

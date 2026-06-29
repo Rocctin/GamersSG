@@ -18,8 +18,8 @@ importers:
         specifier: ^2.9.16
         version: 2.9.16
       typescript:
-        specifier: ^5.7.0
-        version: 5.9.3
+        specifier: ^6.0.3
+        version: 6.0.3
 
   apps/backend:
     dependencies:
@@ -206,8 +206,8 @@ importers:
         specifier: ^4.0.0
         version: 4.3.0
       typescript:
-        specifier: ^5.7.0
-        version: 5.9.3
+        specifier: ^6.0.3
+        version: 6.0.3
 
   packages/database:
     dependencies:
@@ -3085,6 +3085,11 @@ packages:
     engines: {node: '>=14.17'}
     hasBin: true
 
+  typescript@6.0.3:
+    resolution: {integrity: sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw==}
+    engines: {node: '>=14.17'}
+    hasBin: true
+
   uid@2.0.2:
     resolution: {integrity: sha512-u3xV3X7uzvi5b1MncmZo3i2Aw222Zk1keqLA1YkHldREkAhAqi65wuPfe7lHx8H/Wzy+8CE7S7uS3jekIM5s8g==}
     engines: {node: '>=8'}
@@ -5952,6 +5957,8 @@ snapshots:
   typedarray@0.0.6: {}
 
   typescript@5.9.3: {}
+
+  typescript@6.0.3: {}
 
   uid@2.0.2:
     dependencies:

@@ -6,6 +6,17 @@ echo "  Gamers.SG — Development Environment Setup"
 echo "================================================"
 echo ""
 
+# ---- Configurable DB credentials ----
+# Override via environment variables before running this script:
+#   export PGUSER=postgres PGPASSWORD=mypass PGHOST=localhost PGPORT=5432 PGDATABASE=gamers_sg
+#   bash scripts/dev-setup.sh
+PGUSER="${PGUSER:-postgres}"
+PGPASSWORD="${PGPASSWORD:-password}"
+PGHOST="${PGHOST:-localhost}"
+PGPORT="${PGPORT:-5432}"
+PGDATABASE="${PGDATABASE:-gamers_sg}"
+DATABASE_URL="postgresql://${PGUSER}:${PGPASSWORD}@${PGHOST}:${PGPORT}/${PGDATABASE}"
+
 # ---- Check prerequisites ----
 echo "[1/5] Checking prerequisites..."
 
@@ -24,7 +35,7 @@ echo "  ✅ pnpm $(pnpm --version)"
 
 if ! command -v psql &>/dev/null; then
   echo "  ⚠️  PostgreSQL (psql) not found in PATH."
-  echo "      Please install PostgreSQL and ensure it's running on port 5432."
+  echo "      Please install PostgreSQL and ensure it's running on port ${PGPORT}."
   echo "      Windows: https://www.postgresql.org/download/windows/"
   echo "      macOS:   brew install postgresql@16"
   echo "      Linux:   sudo apt install postgresql"
@@ -41,10 +52,20 @@ pnpm install
 echo ""
 echo "[3/5] Setting up environment files..."
 
+if [ ! -f "packages/database/.env" ]; then
+  cat > packages/database/.env <<EOF
+DATABASE_URL=${DATABASE_URL}
+EOF
+  echo "  ✅ Created packages/database/.env"
+else
+  echo "  ⚠️  packages/database/.env already exists — skipping"
+fi
+
 if [ ! -f "apps/backend/.env" ]; then
+  JWT_SECRET="dev-jwt-secret-change-in-production-$(openssl rand -hex 16 2>/dev/null || echo "0123456789abcdef0123456789abcdef")"
   cat > apps/backend/.env <<EOF
-DATABASE_URL=postgresql://postgres:password@localhost:5432/gamers_sg
-JWT_SECRET=dev-jwt-secret-change-in-production-0123456789abcdef0123456789abcdef
+DATABASE_URL=${DATABASE_URL}
+JWT_SECRET=${JWT_SECRET}
 RESEND_API_KEY=re_placeholder
 FRONTEND_URL=http://localhost:3001
 PORT=3000
@@ -68,44 +89,66 @@ fi
 echo ""
 echo "[4/5] Setting up database..."
 
-# Check if DATABASE_URL is reachable
-DATABASE_URL="${DATABASE_URL:-postgresql://postgres:password@localhost:5432/gamers_sg}"
-
-if command -v psql &>/dev/null; then
-  # Try to create database if it doesn't exist
-  DB_NAME=$(echo "$DATABASE_URL" | sed -n 's/.*\/\([^?]*\).*/\1/p')
-  if ! psql "$DATABASE_URL" -c "SELECT 1" &>/dev/null 2>&1; then
-    echo "  Creating database '$DB_NAME'..."
-    # Try connecting to postgres default db to create our database
-    DEFAULT_URL=$(echo "$DATABASE_URL" | sed 's/\/[^/]*$/\/postgres/')
-    if psql "$DEFAULT_URL" -c "CREATE DATABASE \"$DB_NAME\";" &>/dev/null 2>&1; then
-      echo "  ✅ Database '$DB_NAME' created"
-    else
-      echo "  ⚠️  Could not create database automatically."
-      echo "      Please create it manually: CREATE DATABASE gamers_sg;"
-    fi
-  else
-    echo "  ✅ Database is reachable"
-  fi
-
-  # Push schema and generate client
-  echo "  Pushing Prisma schema..."
-  pnpm db:push
-
-  echo "  Generating Prisma client..."
-  pnpm db:generate
-
-  # Seed database
-  echo "  Seeding database..."
-  pnpm db:seed
-
-  echo "  ✅ Database setup complete"
-else
+if ! command -v psql &>/dev/null; then
   echo "  ⚠️  psql not available — skipping database setup."
   echo "      Once PostgreSQL is running, manually run:"
   echo "        pnpm db:push"
   echo "        pnpm db:generate"
   echo "        pnpm db:seed"
+else
+  # Verify we can connect before doing anything
+  echo "  Checking database connection..."
+  echo "  URL: ${DATABASE_URL}"
+
+  if ! psql "$DATABASE_URL" -c "SELECT 1" &>/dev/null 2>&1; then
+    echo ""
+    echo "  ❌ Cannot connect to PostgreSQL at ${PGHOST}:${PGPORT} as ${PGUSER}."
+    echo ""
+    echo "  Troubleshooting:"
+    echo "    1. Is PostgreSQL running?"
+    echo "    2. Is the password correct? (current: '${PGPASSWORD}')"
+    echo "    3. Is the port correct? (current: ${PGPORT})"
+
+    # Try to create the database via the default 'postgres' database
+    DEFAULT_URL="postgresql://${PGUSER}:${PGPASSWORD}@${PGHOST}:${PGPORT}/postgres"
+    if psql "$DEFAULT_URL" -c "CREATE DATABASE \"${PGDATABASE}\";" &>/dev/null 2>&1; then
+      echo "  ✅ Database '${PGDATABASE}' created successfully"
+    else
+      echo ""
+      echo "  To fix, set the correct credentials before re-running:"
+      echo "    export PGUSER=postgres PGPASSWORD=your_password bash scripts/dev-setup.sh"
+      echo ""
+      echo "  Or edit the .env files manually:"
+      echo "    packages/database/.env"
+      echo "    apps/backend/.env"
+      echo ""
+      echo "  Then manually run:"
+      echo "    pnpm db:push"
+      echo "    pnpm db:generate"
+      echo "    pnpm db:seed"
+      echo ""
+      echo "  ⚠️  Skipping remaining database steps."
+      # Skip to done — don't run db:push with wrong credentials
+      DB_SETUP_FAILED=1
+    fi
+  else
+    echo "  ✅ Database is reachable"
+  fi
+
+  if [ -z "${DB_SETUP_FAILED:-}" ]; then
+    # Push schema and generate client
+    echo "  Pushing Prisma schema..."
+    pnpm db:push
+
+    echo "  Generating Prisma client..."
+    pnpm db:generate
+
+    # Seed database
+    echo "  Seeding database..."
+    pnpm db:seed
+
+    echo "  ✅ Database setup complete"
+  fi
 fi
 
 # ---- Done ----
@@ -123,4 +166,12 @@ echo "    Frontend:  http://localhost:3001"
 echo ""
 echo "  Or run both together:"
 echo "    pnpm dev"
+echo ""
+if [ -n "${DB_SETUP_FAILED:-}" ]; then
+  echo "  ⚠️  Database setup was skipped due to connection failure."
+  echo "  Once you fix the credentials, run:"
+  echo "    pnpm db:push && pnpm db:generate && pnpm db:seed"
+else
+  echo "  💡 Tip: Run 'pnpm db:demo' to seed 10 demo user accounts."
+fi
 echo "================================================"

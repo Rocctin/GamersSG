@@ -1,4 +1,5 @@
 import { Injectable, UnauthorizedException, ForbiddenException } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
 import { PrismaService } from "../../prisma/prisma.service";
 import { EmailService } from "./email/email.service";
@@ -15,6 +16,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly emailService: EmailService,
     private readonly auditService: AuditService,
+    private readonly configService: ConfigService,
   ) {}
 
   async requestMagicLink(email: string, ip: string, userAgent: string) {
@@ -80,10 +82,18 @@ export class AuthService {
     });
 
     // 8. Return (always same message — don't reveal if user exists)
-    return {
+    const response: { message: string; devMagicLink?: string } = {
       message:
         "If an account exists with this email, a magic link has been sent.",
     };
+
+    // In development, expose the magic link for the developer
+    if (this.configService.get<string>("NODE_ENV") === "development") {
+      const frontendUrl = this.configService.get<string>("FRONTEND_URL");
+      response.devMagicLink = `${frontendUrl}/verify?token=${rawToken}`;
+    }
+
+    return response;
   }
 
   async verifyMagicLink(rawToken: string) {

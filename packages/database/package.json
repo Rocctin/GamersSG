@@ -2,7 +2,7 @@
   "name": "@gamers-sg/database",
   "version": "0.0.1",
   "private": true,
-  "main": "./src/index.ts",
+  "main": "./src/index.js",
   "types": "./src/index.ts",
   "scripts": {
     "db:generate": "prisma generate",

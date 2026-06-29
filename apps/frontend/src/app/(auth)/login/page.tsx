@@ -13,6 +13,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isSent, setIsSent] = useState(false);
+  const [devMagicLink, setDevMagicLink] = useState<string | null>(null);
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -32,7 +33,8 @@ export default function LoginPage() {
 
     setIsLoading(true);
     try {
-      await requestMagicLink(email.trim());
+      const link = await requestMagicLink(email.trim());
+      setDevMagicLink(link ?? null);
       setIsSent(true);
     } catch (err: any) {
       const message = err.response?.data?.error?.message || "Something went wrong";
@@ -122,8 +124,29 @@ export default function LoginPage() {
               <p className="text-slate-400 text-sm mb-6">
                 We sent a magic link to <strong className="text-slate-300">{email}</strong>. Click the link to sign in.
               </p>
+
+              {devMagicLink && (
+                <div className="mb-6 p-4 bg-amber-500/10 border border-amber-500/20 rounded-lg text-left">
+                  <p className="text-amber-400 text-xs font-semibold uppercase tracking-wider mb-2">
+                    🔧 Dev Mode — No email sent
+                  </p>
+                  <p className="text-slate-300 text-xs mb-3">
+                    Resend is not configured. Click the link below to sign in:
+                  </p>
+                  <a
+                    href={devMagicLink}
+                    className="block w-full bg-amber-500 hover:bg-amber-600 text-black font-semibold text-sm px-4 py-2.5 rounded-lg transition-colors text-center"
+                  >
+                    Open Magic Link →
+                  </a>
+                  <p className="text-slate-500 text-xs mt-2 break-all">
+                    {devMagicLink}
+                  </p>
+                </div>
+              )}
+
               <button
-                onClick={() => setIsSent(false)}
+                onClick={() => { setIsSent(false); setDevMagicLink(null); }}
                 className="text-brand-500 hover:text-brand-400 text-sm transition-colors"
               >
                 Use a different email

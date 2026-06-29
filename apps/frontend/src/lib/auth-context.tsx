@@ -19,7 +19,7 @@ interface AuthState {
 }
 
 interface AuthContextValue extends AuthState {
-  requestMagicLink: (email: string) => Promise<void>;
+  requestMagicLink: (email: string) => Promise<string | undefined>;
   verifyToken: (token: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshSession: () => Promise<void>;
@@ -59,7 +59,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [refreshSession]);
 
   const requestMagicLink = async (email: string) => {
-    await apiClient.post("/auth/magic-link/request", { email });
+    const { data } = await apiClient.post("/auth/magic-link/request", { email });
+    // In development, the backend returns the magic link directly
+    return data?.devMagicLink;
   };
 
   const verifyToken = async (token: string) => {
