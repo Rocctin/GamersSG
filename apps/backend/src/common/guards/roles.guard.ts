@@ -15,7 +15,7 @@ export class RolesGuard implements CanActivate {
     ]);
 
     if (!requiredRoles || requiredRoles.length === 0) {
-      return true; // No roles required
+      return true; // No roles required — any authenticated user can access
     }
 
     const request = context.switchToHttp().getRequest();
@@ -23,6 +23,11 @@ export class RolesGuard implements CanActivate {
 
     if (!user) {
       throw new ForbiddenException("Authentication required");
+    }
+
+    // Admin has universal access — bypasses all role checks
+    if (user.role === "ADMIN") {
+      return true;
     }
 
     const hasRole = requiredRoles.includes(user.role);

@@ -6,15 +6,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Gamers.SG** is a national digital membership platform for gamers in Singapore, developed under the stewardship of SCOGA (Singapore Cybersports and Online Gaming Association). Think of it as "LinkedIn for gamers" — a verified identity and services hub combining competitive gaming profiles, achievements, team management, tournaments, a jobs board, and members-only e-commerce.
 
-**Current Phase**: Phase 1 — Authentication, RBAC, and database foundation.
 - Backend: NestJS + Prisma + PostgreSQL
 - Frontend: Next.js 15 (App Router) + Tailwind CSS v4 + Radix UI
 - Monorepo: Turborepo + pnpm workspaces with shared types/DTOs
 
-**Key Strategic Pillars**:
-- **Monetization**: Annual membership subscription model
-- **Data Authenticity**: SingPass/Myinfo integration for verified, one-person-one-account identity
-- **Ecosystem Value**: Interconnected features creating compounding value for gamers, organisers, and partners
+**Runtime requirements**: Node.js >= 22.0.0, pnpm 10.15.1 (via `packageManager` in root `package.json`).
 
 ## Monorepo Structure
 
@@ -33,54 +29,45 @@ gamers-sg/
 └── pnpm-workspace.yaml   # pnpm workspace definition
 ```
 
-Package references use `workspace:*` protocol. Frontend Next.js uses `transpilePackages: ["@gamers-sg/shared"]` to handle the workspace package.
+Package references use `workspace:*`. Frontend Next.js uses `transpilePackages: ["@gamers-sg/shared"]`.
 
 ## Development Commands
 
 ```bash
-# One-time setup (install deps, create .env files, push schema, seed DB)
-pnpm setup
+pnpm setup          # One-time: install deps, create .env, push schema, seed DB
+pnpm dev            # Run backend + frontend (Turborepo)
 
-# Run both backend + frontend (uses Turborepo)
-pnpm dev
-
-# Run individually
+# Individual dev servers
 pnpm --filter @gamers-sg/backend dev      # Backend on :3000
 pnpm --filter @gamers-sg/frontend dev     # Frontend on :3001
 
-# Build all packages
-pnpm build
-
-# Lint all packages
-pnpm lint
+pnpm build          # Build all packages
+pnpm lint           # Lint all packages
 ```
 
 ### Database Commands
 
-All database commands are defined in `packages/database/package.json` and proxied from root `package.json`:
+All root-level DB commands proxy to `packages/database/package.json`:
 
 ```bash
-pnpm db:generate    # prisma generate — regenerate Prisma Client after schema changes
-pnpm db:push        # prisma db push — push schema to DB (no migration file)
-pnpm db:migrate     # prisma migrate dev — create + apply a named migration
+pnpm db:generate    # prisma generate — regenerate Prisma Client
+pnpm db:push        # prisma db push — push schema to DB (no migration)
+pnpm db:migrate     # prisma migrate dev — create + apply named migration
 pnpm db:seed        # tsx prisma/seed.ts — seed admin user
-pnpm db:demo        # tsx prisma/demo-data.ts — seed 10 demo accounts for dev
+pnpm db:demo        # tsx prisma/demo-data.ts — seed 10 demo accounts
 pnpm db:studio      # prisma studio — open Prisma Studio GUI
 pnpm db:reset       # prisma migrate reset — WARNING: deletes all data
 ```
 
-Additional database commands are available via the database package filter (not proxied at root):
-
+Additional commands (not proxied at root):
 ```bash
-pnpm --filter @gamers-sg/database db:validate   # prisma validate — check schema
-pnpm --filter @gamers-sg/database db:format     # prisma format — format schema
+pnpm --filter @gamers-sg/database db:validate   # prisma validate
+pnpm --filter @gamers-sg/database db:format     # prisma format
 ```
 
 The database package exports a PrismaClient singleton from `@gamers-sg/database` (prevents multiple instances in dev via `globalThis`).
 
 ## Environment Variables
-
-Required env vars (see `.env.example` at root):
 
 | Variable | Location | Purpose |
 |---|---|---|
@@ -93,8 +80,6 @@ Required env vars (see `.env.example` at root):
 | `NEXT_PUBLIC_API_URL` | `apps/frontend/.env.local` | Backend API URL for the frontend |
 | `SEED_ADMIN_EMAIL` | optional | Override default admin email for seeding |
 
-Env validation uses Zod in `apps/backend/src/config/configuration.ts` — the app exits on startup if required vars are missing.
-
 ## Backend Architecture (NestJS)
 
 ### Module Structure
@@ -103,94 +88,178 @@ Env validation uses Zod in `apps/backend/src/config/configuration.ts` — the ap
 src/
 ├── app.module.ts              # Root module — imports all feature modules
 ├── main.ts                    # Bootstrap: cookieParser, CORS, globalPrefix "api"
-├── config/configuration.ts     # Zod-based env validation
+├── config/configuration.ts    # Zod-based env validation
 ├── prisma/
 │   ├── prisma.module.ts       # @Global() module, exports PrismaService
 │   └── prisma.service.ts      # Extends PrismaClient, connects on init
 ├── common/
 │   ├── decorators/
-│   │   ├── public.decorator.ts     # @Public() — skips JWT guard
-│   │   ├── roles.decorator.ts      # @Roles(Role.ADMIN) — RBAC metadata
-│   │   ├── current-user.decorator.ts  # @CurrentUser() — extracts JWT payload from request
-│   │   └── rate-limit.decorator.ts     # @RateLimit(config) — configures per-endpoint rate limits
+│   │   ├── public.decorator.ts         # @Public() — skips JWT guard
+│   │   ├── roles.decorator.ts          # @Roles(Role.ADMIN) — RBAC metadata
+│   │   ├── current-user.decorator.ts   # @CurrentUser() — extracts JWT payload
+│   │   └── rate-limit.decorator.ts     # @RateLimit(config) — per-endpoint rate limiting
 │   ├── guards/
 │   │   ├── jwt-auth.guard.ts       # Global guard: checks JWT unless @Public()
 │   │   ├── roles.guard.ts          # Global guard: checks @Roles() metadata
-│   │   └── rate-limit.guard.ts     # Per-route guard: DB-backed rate limiting, configurable via @RateLimit() decorator
+│   │   └── rate-limit.guard.ts     # Per-route guard, DB-backed rate limiting
 │   └── filters/
-│       └── http-exception.filter.ts # Global filter: wraps errors as { success, error }
+│       └── http-exception.filter.ts # Global: wraps errors as { success, error }
 └── modules/
     ├── auth/                  # Magic link request/verify/refresh/logout
-    │   ├── auth.module.ts     # JwtModule.registerAsync, AuditModule import
-    │   ├── auth.controller.ts # /api/auth/* endpoints
-    │   ├── auth.service.ts    # Token generation, verification, rotation
-    │   ├── email/email.service.ts  # Resend integration
-    │   ├── templates/magic-link.ts # HTML email template
-    │   └── strategies/jwt.strategy.ts  # Passport JWT strategy
-    ├── users/                 # User profiles
-    │   ├── users.module.ts
-    │   ├── users.controller.ts    # /api/users/* endpoints
-    │   ├── users.service.ts       # Profile fetch with visibility handling
-    │   └── profiles/
-    │       ├── gamer-profile.service.ts      # Gamer profile CRUD, username throttle
-    │       └── organiser-profile.service.ts  # Organiser profile CRUD + admin review
-    ├── admin/                 # Admin panel endpoints
-    │   ├── admin.module.ts
-    │   ├── admin.controller.ts    # All routes require @Roles(Role.ADMIN)
-    │   └── admin.service.ts       # User management, organiser review, audit log retrieval
-    └── audit/
-        ├── audit.module.ts    # Exports AuditService to Auth + Admin modules
-        └── audit.service.ts   # Insert-only audit log writer (never throws)
+    ├── users/                 # User profiles, search, discovery
+    │   └── profiles/          # gamer-profile.service, organiser-profile.service
+    ├── admin/                 # Admin panel (user mgmt, organiser review, audit log retrieval)
+    ├── games/                 # Game library CRUD + players-by-game endpoint
+    ├── tournaments/           # Tournaments + events (shared service, separate controllers)
+    ├── connections/           # Bidirectional connections (send → accept → connected)
+    ├── teams/                 # Team CRUD, roster, invites, disband
+    └── audit/                 # Insert-only audit log
 ```
 
 ### Key Patterns
 
-- **Guards run globally**: `JwtAuthGuard` and `RolesGuard` are registered as `APP_GUARD` in `AppModule`. Use `@Public()` to bypass JWT; use `@Roles()` to require specific roles. If no `@Roles()` is set, all authenticated users can access.
-- **Prisma is global**: `PrismaModule` is `@Global()` so all services inject `PrismaService` without importing the module.
-- **Response format**: All errors go through `HttpExceptionFilter`, which outputs `{ success: false, error: { code, message, details? } }`.
-- **Rate limiting**: `RateLimitGuard` is applied per-route via the `@RateLimit()` decorator, which accepts `{ windowMinutes, maxAttempts, keyPrefix }`. The guard keys by IP for decorator-configured endpoints; legacy endpoints without the decorator fall back to email-based keys. DB-backed (`RateLimitBucket` table). Replace with Redis at scale.
+- **Global guards**: `JwtAuthGuard` and `RolesGuard` are `APP_GUARD`. Use `@Public()` to bypass JWT; use `@Roles()` to require specific roles. No `@Roles()` = any authenticated user can access.
+- **Prisma is global**: `PrismaModule` is `@Global()` — all services inject `PrismaService` without importing the module.
+- **Response format**: Errors go through `HttpExceptionFilter` → `{ success: false, error: { code, message, details? } }`. Success uses `{ success: true, data, meta? }`.
+- **Service-level mappers**: Services use private `map*()` helper methods to convert Prisma snake_case results to camelCase DTOs. Controllers pass through mapped results directly.
+- **Literal routes must precede `:id` param routes** in NestJS controllers. Express matches routes in order, so `/users/search` and `/users/discover/people-you-may-know` must be declared before `/users/:id`.
 
-  Current rate limits:
-  | Endpoint | Window | Max Attempts | Key |
-  |---|---|---|---|
-  | `POST /auth/magic-link/request` | 15 min | 5 | email (legacy) |
-  | `POST /auth/magic-link/verify` | 15 min | 10 | IP |
-  | `POST /auth/refresh` | 5 min | 20 | IP |
-  | `GET /users/:id` | 1 min | 30 | IP |
+### Route Ordering Convention
 
-## Authentication Flow
+When a controller has both literal routes and parameterized routes, literal routes ALWAYS come first:
 
-### Magic Link → JWT + Refresh Token
+```typescript
+@Controller("users")
+export class UsersController {
+  @Get("me")                        // ← literal
+  @Get("by-username/:username")     // ← literal (contains nested :param)
+  @Get("search")                    // ← literal
+  @Get("discover/people-you-may-know") // ← literal
+  @Get(":id")                       // ← parameterized (LAST)
+}
+```
 
-1. User submits email → `POST /api/auth/magic-link/request`
-2. System upserts user (auto-creates `GAMER`/`APPROVED` if new), generates 128-char hex token, hashes with SHA-256, stores in `AuthToken`, sends email via Resend
-3. Previous unused tokens for that user are invalidated (single active link at a time)
-4. User clicks link → `POST /api/auth/magic-link/verify` with raw token
-5. System validates: token exists, unused, not expired, user not suspended
-6. Returns JWT access token (15-min expiry) + user profile in response body
-7. Sets **two** `httpOnly` cookies:
-   - `refresh_token` (30-day expiry) at path `/api/auth` — sent only to auth endpoints
-   - `access_token` (15-min expiry) at path `/` — readable by Next.js middleware for route protection
-8. Refresh token is stored in DB as SHA-256 hash for individual revocation
+This applies to all controllers: `TeamsController`, `GamesController`, etc. Route ordering bugs manifest as 404s on literal endpoints.
 
-### Session Persistence (Refresh Token Rotation)
+## Database Schema
 
-- `POST /api/auth/refresh` — reads `refresh_token` cookie, validates, revokes old token, issues new pair (rotation)
-- `POST /api/auth/logout` — revokes the refresh token, clears cookie
-- Admin can revoke all refresh tokens for a suspended user (`authService.revokeAllUserTokens()`)
-- JWT strategy also checks user existence + suspended status on every authenticated request
+### Schema Change Workflow
+1. Edit `packages/database/prisma/schema.prisma`
+2. `pnpm db:generate` — regenerate Prisma Client
+3. Update relevant DTOs in `packages/shared/src/dto/` if API surface changes
+4. Update backend services/controllers that use changed fields
+5. Update frontend forms/display
 
-### Backend → Frontend Token Flow
+### Schema Conventions
+- **UUID PKs**: All tables use `@default(uuid()) @db.Uuid`
+- **Timestamps**: All use `@db.Timestamptz` (PostgreSQL `timestamptz`)
+- **Snake case in DB**: `snake_case` columns → camelCase in TypeScript via Prisma
+- **Composite unique constraints**: Used heavily — `@@unique([requester_id, addressee_id])` on Connection, `@@id([team_id, user_id])` on TeamMember, `@@unique([team_id, invitee_id])` on TeamInvite, `@@id([team_id, game_id])` on TeamGame
+- **Historical preservation**: Team memberships use `left_at` (null = active) instead of deletion; teams use `DISBANDED` status instead of deletion
+- **Cascade deletes**: User deletion cascades to profiles, tokens, registrations, connections, team memberships, team invites
 
-Both tokens are set as `httpOnly`, `sameSite: "lax"` cookies (not accessible to JS) by the backend:
-- `refresh_token` — path `/api/auth`, 30-day expiry, sent only on auth API calls
-- `access_token` — path `/`, 15-min expiry, sent on all requests (readable by Next.js middleware)
+### Key Models
 
-The frontend also stores the **access token in memory** (via `api-client.ts`) to attach it as an `Authorization: Bearer` header on API requests — this is the token the backend actually verifies cryptographically. The `access_token` cookie is used only by the Next.js middleware for client-side route gating (see Middleware section).
+**Connection** (Phase 2) — LinkedIn-style bidirectional:
+- `requester_id` + `addressee_id` with `@@unique` constraint
+- Status: `PENDING` → `ACCEPTED` or `REJECTED`
+- Business rules: can't self-connect, duplicate detection, re-send allowed on REJECTED, either party can remove ACCEPTED connections, only addressee can accept/reject
 
-On page load, `AuthProvider` calls `POST /api/auth/refresh` (which sends the `refresh_token` cookie) to restore the session. The refresh endpoint also rotates both cookies and returns a fresh access token in the response body.
+**Team** (Phase 3):
+- `tag` is unique (2-6 alphanum, uppercased on write)
+- `status`: `ACTIVE` | `DISBANDED`
+- `creator` → CAPTAIN membership auto-created on team creation
+- Max 5 active team memberships per user, max 10 members per team
+- `TournamentRegistration.team_id` links to Team with `onDelete: SetNull`
+
+**TeamMember** — composite PK `[team_id, user_id]`, `left_at` preserves history
+
+**TeamInvite** — composite unique `[team_id, invitee_id]`, status workflow: `PENDING` → `ACCEPTED`/`REJECTED`
+
+**TeamGame** — composite PK `[team_id, game_id]`, many-to-many
+
+## Shared Package (`@gamers-sg/shared`)
+
+Exports via subpath patterns:
+
+| Import path | Contents |
+|---|---|
+| `@gamers-sg/shared` | Everything (enums, types, DTOs, constants) |
+| `@gamers-sg/shared/dto` | All DTOs across all domains |
+| `@gamers-sg/shared/enums` | Re-exports Prisma enums from `@gamers-sg/database` |
+| `@gamers-sg/shared/types` | `JwtPayload`, `ApiResponse<T>`, `PaginatedResponse<T>`, `PaginationQueryDto` |
+| `@gamers-sg/shared/constants` | `AUTH` (token expiry, username cooldown), `RATE_LIMITS`, `PAGINATION` |
+
+DTOs organized by domain file: `auth.dto.ts`, `user.dto.ts`, `admin.dto.ts`, `game.dto.ts`, `tournament.dto.ts`, `event.dto.ts`, `profile.dto.ts`, `connection.dto.ts`, `team.dto.ts`, `discovery.dto.ts`. All re-exported via `index.ts`.
+
+## Role-Based Access Control
+
+| Role | Access |
+|---|---|
+| `GAMER` | Dashboard, own profile, games, connections, teams, discover, tournament/event registration |
+| `ORGANISER` | All GAMER access + organiser profile, tournament/event CRUD and management |
+| `ADMIN` | All of the above + admin panel: user management, organiser review, tournament/event review, game library management, audit log viewer |
+
+## Authentication
+
+### Flow: Magic Link → JWT + Refresh Token
+1. `POST /api/auth/magic-link/request` — upserts user, generates token, sends email via Resend
+2. Previous unused tokens for that user are invalidated (single active link)
+3. `POST /api/auth/magic-link/verify` — validates token, returns JWT access token (15-min) + user profile
+4. Sets two `httpOnly`, `sameSite: "lax"` cookies:
+   - `refresh_token` (30-day, path `/api/auth`)
+   - `access_token` (15-min, path `/`)
+5. `POST /api/auth/refresh` — reads `refresh_token` cookie, validates, revokes old, issues new pair (rotation)
+6. `POST /api/auth/logout` — revokes refresh token, clears cookie
+
+### Token Storage & Security
+- Refresh tokens stored as SHA-256 hash in DB (individual revocation)
+- Access token stored in memory only (not localStorage): `apiClient` sets via `setAccessToken()` and attaches via `Authorization: Bearer` header
+- `access_token` cookie is used by Next.js middleware for client-side route gating only (decode, no cryptographic verify)
 
 ## Frontend Architecture (Next.js 15 App Router)
+
+### Next.js 15 Params Pattern
+Dynamic route params are now `Promise<T>` — must be unwrapped with `use()`:
+
+```typescript
+import { use } from "react";
+
+export default function Page({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
+  // ...
+}
+```
+
+### Two API Client Instances
+
+- **`apiClient`** (default from `@/lib/api-client`): Attaches `Bearer` token via request interceptor, auto-refreshes on 401 with request queuing, `withCredentials: true`. Used for all authenticated pages.
+- **`apiPublic`** (named export): No auth header, no interceptors, no cookies. Used for public browse pages (`/tournaments`, `/events`) where the user may not be logged in. Also used conditionally in connection-aware components (see below).
+
+### Connection-Aware Fetching Pattern
+Components that display profile data conditionally use `apiClient` when authenticated (to send cookies so the backend can compute `connectionStatus`, `mutualConnectionsCount`) or `apiPublic` when the viewer is anonymous:
+
+```typescript
+const client = isAuthenticated ? apiClient : apiPublic;
+const { data } = await client.get(`/users/by-username/${username}`);
+```
+
+### Auth Client Architecture
+
+```
+AuthProvider (React Context)
+  ├── On mount: POST /auth/refresh (sends cookies via withCredentials)
+  └── Provides: user (UserProfileDto), isLoading, isAuthenticated, logout
+
+apiClient (Axios)
+  ├── Request interceptor: attaches Authorization: Bearer <accessToken>
+  └── Response interceptor on 401:
+      ├── Queues concurrent requests during refresh
+      ├── Calls /auth/refresh (with cookie)
+      ├── Retries queued requests with new token
+      └── On refresh 401: clears token, redirects to /login
+      └── On refresh network error: rejects without logout (callers can retry)
+```
 
 ### Route Groups
 
@@ -198,174 +267,156 @@ On page load, `AuthProvider` calls `POST /api/auth/refresh` (which sends the `re
 src/app/
 ├── layout.tsx                      # Root: AuthProvider + Toaster, dark theme
 ├── page.tsx                        # Landing page
-├── about/page.tsx                  # Public about page (no route group, always accessible)
-├── (auth)/                         # Public routes
-│   ├── login/page.tsx              # Email → magic link request
-│   └── verify/page.tsx             # Token verification from magic link URL
-└── (dashboard)/                    # Protected routes (redirects to /login if unauthenticated)
-    ├── layout.tsx                  # Auth guard + DashboardLayout wrapper
-    ├── dashboard/page.tsx          # Welcome card + quick links
+├── (auth)/                         # Public auth routes
+│   ├── login/page.tsx              # Email → magic link
+│   └── verify/page.tsx             # Token verification from link
+├── tournaments/                    # Public tournament listings + detail
+├── events/                         # Public event listings + detail
+├── u/[username]/page.tsx           # Public gamer profile showcase (Phase 1)
+└── (dashboard)/                    # Protected routes (middleware redirects to /login)
+    ├── layout.tsx                  # Auth guard + DashboardLayout
+    ├── dashboard/page.tsx          # Welcome card + completeness + people you may know widget
     ├── profile/page.tsx            # User profile
-    ├── settings/page.tsx           # Account settings
-    └── admin/                      # Admin-only routes (@Roles(ADMIN) enforced by API)
-        ├── layout.tsx
-        ├── page.tsx
-        ├── users/page.tsx
-        ├── organisers/page.tsx
-        └── audit-logs/page.tsx
-```
-
-### Auth Client Architecture
-
-```
-AuthProvider (React Context)
-  ├── On mount: tries POST /auth/refresh (sends cookies automatically via withCredentials)
-  ├── On success: stores access token in memory (for Authorization header) + sets user + isAuthenticated
-  ├── On failure: clears state, user sees login page
-  └── Provides: user, isLoading, isAuthenticated, requestMagicLink, verifyToken, logout
-
-apiClient (Axios instance)
-  ├── Request interceptor: attaches `Authorization: Bearer <accessToken>`
-  ├── Response interceptor on 401:
-  │   ├── Queues concurrent requests during refresh
-  │   ├── Calls /auth/refresh (with cookie)
-  │   ├── Retries queued requests with new token
-  │   └── On refresh failure: clears token, redirects to /login
-  └── withCredentials: true (sends cookies automatically)
+    ├── profile/edit/page.tsx       # Edit gamer profile (Phase 1)
+    ├── connections/page.tsx        # Manage connections (Phase 2)
+    ├── teams/                      # Teams (Phase 3)
+    │   ├── page.tsx                # My teams (current/past/invites tabs)
+    │   ├── create/page.tsx         # Create team form
+    │   ├── [id]/page.tsx           # Team detail (roster, games, invite, disband)
+    │   └── [id]/edit/page.tsx      # Edit team info
+    ├── discover/page.tsx           # Discovery: Search, People You May Know, By Game (Phase 4)
+    ├── settings/page.tsx
+    ├── become-organiser/page.tsx
+    ├── organiser/                  # Organiser-only routes
+    │   ├── page.tsx, tournaments/**, events/**
+    └── admin/                      # Admin-only routes
+        ├── page.tsx, users/, organisers/, games/, tournaments/, events/, audit-logs/
 ```
 
 ### Next.js Middleware (Route Protection)
 
-A `middleware.ts` at the frontend root runs before page JS loads and provides a fast client-side gate:
+`middleware.ts` at the frontend root protects dashboard/admin/organiser/profile/settings routes. If no `access_token` cookie → redirect to `/login?redirect=<path>`. Admin routes additionally decode the JWT (via `jose`, decode-only) to check `role === "ADMIN"`.
 
-- **Protected routes** (`/dashboard/*`, `/profile/*`, `/settings/*`, `/admin/*`): redirects to `/login?redirect=<path>` if no `access_token` cookie is present
-- **Admin routes** (`/admin/*`): decodes the `access_token` JWT using `jose` (decode only — no signature verification) and checks `claims.role === "ADMIN"`. Non-admin users are redirected to `/dashboard`
-- **Caveat**: Middleware JWT decoding is NOT cryptographic verification. The backend enforces actual auth on every API call. A forged cookie with a fake role would render empty page shells without data.
-
-The middleware prevents non-ADMIN users from ever downloading the admin component tree, and unauthenticated users from downloading protected pages.
+**Caveat**: Middleware JWT decoding is NOT cryptographic verification. A forged cookie with a fake role would render empty page shells without data — the backend enforces actual auth on every API call.
 
 ### Key Components
 
-- `DashboardLayout` — responsive sidebar + header layout. Sidebar is fixed on desktop, slide-over on mobile.
-- `Header` — sticky top bar with user menu dropdown (profile, settings, admin link if ADMIN, sign out)
-- `Sidebar` — navigation links with active state highlighting. Admin-only items (Users, Organisers, Audit Logs) shown conditionally via `isAdmin()` check.
-- `useAuth()` hook — re-exports `useAuthContext()` from `@/hooks/use-auth`
+| Component | Purpose |
+|---|---|
+| `DashboardLayout` | Responsive sidebar + header layout |
+| `Sidebar` | Nav with active state highlighting, role-conditional sections (Organiser/Admin), pending-connections badge |
+| `Header` | Sticky top bar with user menu dropdown |
+| `WelcomeCard` | Dashboard greeting card |
+| `PublicProfile` | Reusable public profile display (banner, avatar, bio, games, tournament/event history, teams, connections count) |
+| `CompletenessIndicator` | Profile completeness progress bar (Beginner/Intermediate/All-Star) |
+| `ConnectButton` | 5-state button: Connect, Request Sent (amber→red Cancel on hover), Accept+Decline, Connected (green→red Remove on hover) |
+| `ConnectionCard` | Card for connections list (avatar, name, pending badge) |
+| `TeamCard` | Card for team list (logo, tag, member count, role badge) |
+| `InviteDialog` | Modal for searching users by username and sending team invites |
+| `UserSearchCard` | Discovery card with avatar, games, connect button |
+| `PeopleYouMayKnowWidget` | Reusable widget (compact for dashboard, full for discover page) |
+| `GameSelector` | Reusable game picker component |
 
 ### UI Stack
 
 - **Tailwind CSS v4** (not v3 — uses `@tailwindcss/postcss` plugin, CSS-based config)
 - **Radix UI** primitives: Dialog, DropdownMenu, Slot, Avatar, Label, Select
-- **No shadcn/ui** — Radix primitives are used directly with custom styling
+- **No shadcn/ui** — Radix primitives used directly with custom styling
 - **Lucide React** for icons
 - **Sonner** for toast notifications
-- **react-hook-form** + **zod** for form validation
-- **class-variance-authority** + **tailwind-merge** + **clsx** via `cn()` utility in `@/lib/utils`
-- **jose** for JWT decoding in Next.js middleware (decode only — signature verification is backend-side)
+- **react-hook-form** + **zod** for form validation (tournament/event forms)
+- **class-variance-authority** + **tailwind-merge** + **clsx** via `cn()` utility
+- **jose** for JWT decoding in Next.js middleware (decode only)
 
-## Shared Package (`@gamers-sg/shared`)
+### Tailwind Theme Tokens
 
-Exports via subpath patterns defined in `package.json`:
+Dark theme exclusively. Common tokens:
+- Backgrounds: `bg-surface-950` (deepest), `bg-surface-900` (cards), `bg-surface-800` (inputs/elements), `bg-surface-700` (borders/hover)
+- Brand: `bg-brand-500`, `text-brand-400`, `border-brand-500/20`
+- Text: `text-slate-100` (headings), `text-slate-200` (body), `text-slate-400` (secondary), `text-slate-500` (muted)
+- Status: `bg-green-500/10 text-green-400 border-green-500/20` (success), `bg-red-500/10 text-red-400 border-red-500/20` (danger), `bg-amber-500/10 text-amber-400 border-amber-500/20` (warning)
 
-| Import path | Contents |
-|---|---|
-| `@gamers-sg/shared` | Everything (enums, types, DTOs, constants) |
-| `@gamers-sg/shared/dto` | `UserProfileDto`, `AuthTokensResponse`, `ReviewOrganiserDto`, `UpdateUserStatusDto`, etc. |
-| `@gamers-sg/shared/enums` | Re-exports `Role`, `AccountStatus`, `AuditAction` from `@gamers-sg/database` |
-| `@gamers-sg/shared/types` | `JwtPayload`, `ApiResponse<T>`, `PaginatedResponse<T>`, `PaginationQueryDto` |
-| `@gamers-sg/shared/constants` | `AUTH` (token expiry, username cooldown), `RATE_LIMITS`, `PAGINATION` |
+## Connections Module (Phase 2)
 
-**Note**: The enums file re-exports Prisma enums so consumers don't need a direct dependency on `@gamers-sg/database` just for enums.
+LinkedIn-style bidirectional connections. Both parties must consent — one sends, the other accepts.
 
-## Database Schema Conventions
+**Backend**: `apps/backend/src/modules/connections/` — single `ConnectionsService`, two controllers (`ConnectionsController` at `/connections`, `UserConnectionsController` at `/users` for public count lookup).
 
-- **UUID PKs**: All tables use `@default(uuid()) @db.Uuid`
-- **Timestamps**: All use `@db.Timestamptz` (PostgreSQL `timestamptz`)
-- **Cascade deletes**: User deletion cascades to profiles, tokens (no orphaned data)
-- **Snake case in DB**: `snake_case` column names (e.g., `user_id`, `created_at`) mapped to camelCase in TypeScript via Prisma
-- **Indexes**: Defined on frequently queried columns (email, role+status, token hashes, audit timestamps)
-- **One Person, One Account**: `nric_hash` has a unique constraint (currently nullable, enforced when SingPass is integrated)
+| Endpoint | Auth | Purpose |
+|---|---|---|
+| `POST /connections` | GAMER | Send request (body: `{addresseeId}`) |
+| `PUT /connections/:id/accept` | GAMER | Accept incoming request |
+| `PUT /connections/:id/reject` | GAMER | Reject incoming request |
+| `DELETE /connections/:id` | GAMER | Cancel outgoing / remove connection |
+| `GET /connections` | GAMER | List connections (filter by status, paginated) |
+| `GET /connections/pending-count` | GAMER | Incoming pending count (sidebar badge) |
+| `GET /users/:userId/connections/count` | Public | Connection count (profile display) |
 
-### Key Schema Details
+**Business rules**: Can't self-connect, duplicate detection, REJECTED allows re-send, only addressee can accept/reject, either party can remove ACCEPTED connections.
 
-- `AuthToken.token_hash` — SHA-256 hash of the raw 128-char hex token. The raw token never hits the DB.
-- `RefreshToken.token_hash` — same hashing pattern. Stored in DB so each token can be individually revoked.
-- `GamerProfile.username` — unique, with `username_changed_at` for 90-day throttle enforcement.
-- `OrganiserProfile` — has admin review fields (`reviewed_by`, `reviewed_at`, `rejection_reason`).
-- `AuditLog` — insert-only. Uses `@relation()` attributes to link actor and target to the `User` table.
+**Frontend**: `/connections` page with 3 sub-tabs (Connected/Requests/Sent). `ConnectButton` component has 5 states: none → Connect, pending_sent → Request Sent (hover→Cancel), pending_received → Accept+Decline, accepted → Connected (hover→Remove). Sidebar shows pending count badge.
 
-## Development Workflow Patterns
+## Teams Module (Phase 3)
 
-### Changing the Database Schema
-1. Edit `packages/database/prisma/schema.prisma`
-2. `pnpm db:generate` — regenerate Prisma Client (also available: `pnpm db:migrate` for named migrations)
-3. Update relevant DTOs in `packages/shared/src/dto/` if the API surface changes
-4. Update backend services/controllers that use the changed fields
-5. Update frontend forms/display
+Full team lifecycle: create, invite, roster management, disband.
 
-### Adding a New Audit Action
-1. Add enum value to `AuditAction` in `schema.prisma`
-2. Regenerate client (`pnpm db:generate`) and push schema
-3. Use `AuditService.log()` — errors are caught internally, never crash the caller:
-   ```typescript
-   constructor(private readonly auditService: AuditService) {}
-   
-   await this.auditService.log({
-     actorId: adminUser.id,
-     action: AuditAction.NEW_ACTION,
-     targetId: targetUser.id,
-     targetType: "user",
-     metadata: { reason: "...", oldValue: "...", newValue: "..." },
-     ipAddress: req.ip,
-   });
-   ```
+**Backend**: `apps/backend/src/modules/teams/` — `TeamsService` (~500 lines) + `TeamsController` (12 endpoints).
 
-### Suspending a User
-1. Update `User.status` to `SUSPENDED`
-2. Call `authService.revokeAllUserTokens(userId)` — sets `revoked_at` on all active refresh tokens
-3. Create `AuditLog` with `USER_SUSPENDED` action
-4. Never delete the user record (the JWT strategy also checks `status !== SUSPENDED`)
+| Endpoint | Auth | Purpose |
+|---|---|---|
+| `POST /teams` | GAMER | Create team (creator → CAPTAIN, auto-joins) |
+| `GET /teams/my/teams` | GAMER | Current + past teams split by `left_at` |
+| `GET /teams/my/invites` | GAMER | Pending team invites |
+| `GET /teams` | Public | List/search teams (recruiting, game, pagination filters) |
+| `GET /teams/:id` | Public | Team profile with active roster |
+| `PUT /teams/:id` | CAPTAIN | Update team info |
+| `DELETE /teams/:id` | CAPTAIN | Disband (preserves history via `left_at` + `DISBANDED` status) |
+| `POST /teams/:id/invites` | CAPTAIN/MEMBER | Invite user |
+| `PUT /teams/:id/invites/:inviteId/accept` | invitee | Accept invite (re-activates or creates membership) |
+| `PUT /teams/:id/invites/:inviteId/reject` | invitee | Reject invite |
+| `DELETE /teams/:id/members/:userId` | CAPTAIN or self | Remove member / leave team |
+| `PUT /teams/:id/members/:userId/role` | CAPTAIN | Promote/demote member |
 
-### Adding a New Protected API Endpoint
-- All endpoints are protected by default (global `JwtAuthGuard`)
-- Use `@Public()` decorator for unauthenticated routes
-- Use `@Roles(Role.ADMIN)` (or `Role.GAMER`, `Role.ORGANISER`) for role-restricted routes
-- Use `@CurrentUser()` to get the authenticated user's JWT payload (`{ sub, email, role }`)
-- No `@Roles()` = accessible by any authenticated user
+**Captain safeguards**: Cannot demote/remove the last captain — must promote another first or disband. Disbanding sets all members' `left_at` to now and changes status to `DISBANDED`.
 
-## Role-Based Access Control
+**Frontend**: `/teams` (3-tab: My Teams / Invites / Past), `/teams/create` (name, tag, description, game picker, recruiting toggle), `/teams/[id]` (team profile with banner, roster, captain actions: promote/demote/remove, invite dialog, disband danger zone), `/teams/[id]/edit`. `TeamCard` for lists. `InviteDialog` modal for username search + invite. Public profile shows current + past teams in sidebar.
 
-| Role | Access |
-|---|---|
-| `GAMER` | Dashboard, own profile, own gamer profile management |
-| `ORGANISER` | Dashboard, own profile, organiser profile CRUD |
-| `ADMIN` | All of the above + admin panel: user management, organiser approval/rejection, audit log viewer |
+## Discovery & Network (Phase 4)
 
-During organiser profile creation, the user's status is set to `PENDING`. An admin must review and approve/reject via `POST /api/admin/organisers/:userId/review`. If rejected, updating the profile resets status to `PENDING` for re-review.
+**Backend**: Discovery endpoints live in `UsersController` and `GamesController` (both use `UsersService` logic).
 
-## Out of Scope for V1.0
+**"People You May Know" algorithm** (request-time, no ML):
+1. Shared games → weight 3 each
+2. Mutual connections → weight 5 each
+3. Score descending → top 20 with `reason` field
+4. Excludes: self, existing connections (any status), suspended users, private profiles
 
-- Native iOS/Android apps (responsive web only)
-- In-platform messaging/chat
-- Social feed or content publishing
-- Live bracket management
-- Matchmaking or team-finding algorithms
-- Integrated streaming/VOD
-- Multi-language support (English only)
-- Tests (test infrastructure not yet set up)
+| Endpoint | Auth | Purpose |
+|---|---|---|
+| `GET /users/search?query=` | Public (optional auth) | Search by username/displayName |
+| `GET /users/discover/people-you-may-know` | GAMER | Suggested connections |
+| `GET /games/:slug/players` | Public (optional auth) | Find players by game |
 
-## Future Integration Points
+**Frontend**: `/discover` (3-tab: Search / People You May Know / By Game). Dashboard shows compact "People You May Know" widget (top 5). Sidebar has "Discover" nav item.
 
-- **SingPass/Myinfo**: OAuth 2.0 / OpenID Connect via [api.singpass.gov.sg](https://api.singpass.gov.sg). 4-8 week approval as a Relying Party.
-- **Payment Gateway**: Stripe (SGD), HitPay (PayNow), or Braintree. PCI-DSS — never store card data.
-- **Email**: Resend (current). Verified sending domain: `@gamers.sg`.
-- **File Storage**: AWS S3, GCS, or Cloudflare R2 with CDN for avatars, banners, product images.
+## Profile Completeness (Phase 1)
 
-## Critical Decisions Pending (SCOGA)
+Server-computed score shown as progress bar on dashboard + own profile:
+- Avatar set: 20pts, DisplayName set: 15pts, Bio set: 15pts, ≥1 game: 20pts, Banner set: 10pts, ≥3 games: 10pts, ≥1 connection: 10pts
+- Labels: Beginner (0-39), Intermediate (40-69), All-Star (70-100)
 
-- Annual membership pricing (monthly option?)
-- Organiser listing fees (if any)
-- Jobs board listing fees (if any)
-- Points expiry policy (currently 24-month expiry TBD)
-- Minimum cash payment in store (can points offset 100%?)
-- Physical goods fulfilment logistics (in-house or partner-managed?)
-- SingPass Relying Party application status
+## Key Architectural Decisions
+
+- **No soft-deletes for teams**: Historical preservation uses `left_at` (nullable timestamp) on TeamMember + `DISBANDED` team status. Never hard-delete team data.
+- **Symmetrical connections**: Once ACCEPTED, both parties are equally connected — either can remove. The `requester`/`addressee` distinction only matters during PENDING state.
+- **Connection-aware profile queries**: Backend profile endpoints accept an optional `viewerId` — the backend computes whether the viewer has a connection/pending request with the profile owner, plus mutual connection counts. This avoids N+1 client-side queries.
+- **Team game selection is additive**: Games are pre-selected at creation (optional `gameIds` array) but can't be edited afterward via the API (not yet implemented — stored for future).
+- **Discovery is request-time, not pre-computed**: "People You May Know" recomputes every request. No caching, no ML — simple scoring across 200 candidates max.
+
+## Out of Scope
+
+- Native mobile apps, messaging/chat, social feed
+- Live bracket management, matchmaking
+- Multi-language support
+- Tests (infrastructure not yet set up)
+- Achievements module, notifications, Stripe integration

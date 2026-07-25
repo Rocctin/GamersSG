@@ -1,5 +1,6 @@
 export type {
   RequestMagicLinkDto,
+  RegisterDto,
   VerifyMagicLinkDto,
   AuthTokensResponse,
   RefreshTokenDto,
@@ -14,7 +15,18 @@ export type {
   UpdateOrganiserProfileDto,
 } from "./user.dto";
 
-export type { ReviewOrganiserDto, UpdateUserStatusDto } from "./admin.dto";
+export type {
+  ReviewOrganiserDto,
+  UpdateUserStatusDto,
+  UpdateUserRoleDto,
+  HardDeleteUserDto,
+  HardDeleteTeamDto,
+  HardDeleteGameDto,
+  HardDeleteTournamentDto,
+  AdminTournamentStatusDto,
+  AdminRemoveConnectionDto,
+  AdminUpdateUserProfileDto,
+} from "./admin.dto";
 
 export type {
   GameDto,
@@ -40,3 +52,39 @@ export type {
   CreateEventRegistrationDto,
   EventFilterDto,
 } from "./event.dto";
+
+export type {
+  PublicProfileDto,
+  EnhancedGamerProfileDto,
+  TournamentHistoryEntryDto,
+  EventHistoryEntryDto,
+  ProfileCompletenessDto,
+  TeamMembershipDto,
+  ConnectionStatusInfo,
+} from "./profile.dto";
+
+export type {
+  ConnectionDto,
+  SendConnectionRequestDto,
+  ConnectionListResponse,
+  PendingRequestCountDto,
+} from "./connection.dto";
+
+export type {
+  TeamDto,
+  TeamWithMembersDto,
+  TeamGameDto,
+  TeamMemberDto,
+  TeamInviteDto,
+  CreateTeamDto,
+  UpdateTeamDto,
+  InviteUserDto,
+  UpdateMemberRoleDto,
+} from "./team.dto";
+
+export type {
+  UserSearchResultDto,
+  PeopleYouMayKnowDto,
+  GamePlayerDto,
+  DiscoveryResponse,
+} from "./discovery.dto";

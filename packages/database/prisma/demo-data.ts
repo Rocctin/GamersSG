@@ -2,10 +2,7 @@ import { PrismaClient, Role, AccountStatus } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
-// ─────────────────────────────────────────
-// Demo account definitions
-// ─────────────────────────────────────────
-
+// Demo Data
 interface DemoGamer {
   email: string;
   username: string;
@@ -14,6 +11,7 @@ interface DemoGamer {
   visibility: "PUBLIC" | "MEMBERS_ONLY" | "PRIVATE";
   isMember: boolean;
   pointsBalance: number;
+  phone: string;
 }
 
 interface DemoOrganiser {
@@ -25,6 +23,7 @@ interface DemoOrganiser {
   contactPerson: string;
   contactNumber: string;
   description: string;
+  phone: string;
 }
 
 const DEMO_GAMERS: DemoGamer[] = [
@@ -36,6 +35,7 @@ const DEMO_GAMERS: DemoGamer[] = [
     visibility: "PUBLIC",
     isMember: true,
     pointsBalance: 2500,
+    phone: "91234567",
   },
   {
     email: "gamer2@demo.sg",
@@ -45,6 +45,7 @@ const DEMO_GAMERS: DemoGamer[] = [
     visibility: "PUBLIC",
     isMember: true,
     pointsBalance: 4200,
+    phone: "82345678",
   },
   {
     email: "gamer3@demo.sg",
@@ -54,6 +55,7 @@ const DEMO_GAMERS: DemoGamer[] = [
     visibility: "MEMBERS_ONLY",
     isMember: true,
     pointsBalance: 1800,
+    phone: "83456789",
   },
   {
     email: "gamer4@demo.sg",
@@ -63,6 +65,7 @@ const DEMO_GAMERS: DemoGamer[] = [
     visibility: "PUBLIC",
     isMember: false,
     pointsBalance: 0,
+    phone: "84567890",
   },
   {
     email: "gamer5@demo.sg",
@@ -72,6 +75,7 @@ const DEMO_GAMERS: DemoGamer[] = [
     visibility: "PUBLIC",
     isMember: true,
     pointsBalance: 8900,
+    phone: "85678901",
   },
 ];
 
@@ -84,6 +88,7 @@ const DEMO_ORGANISERS: DemoOrganiser[] = [
     website: "https://sel.sg",
     contactPerson: "Alex Tan",
     contactNumber: "+65 1234 4567",
+    phone: "81234567",
     description:
       "The Singapore Esports League (SEL) organises competitive gaming tournaments across multiple titles including Valorant, League of Legends, and Mobile Legends. We run seasonal leagues and major LAN events.",
   },
@@ -95,6 +100,7 @@ const DEMO_ORGANISERS: DemoOrganiser[] = [
     website: "https://nyp.edu.sg/gaming",
     contactPerson: "Sarah Lim",
     contactNumber: "+65 1233 4322",
+    phone: "82345678",
     description:
       "NYP Gaming Club brings together students passionate about esports and competitive gaming. We host internal tournaments, viewing parties, and workshops on game design and shoutcasting.",
   },
@@ -106,6 +112,7 @@ const DEMO_ORGANISERS: DemoOrganiser[] = [
     website: "https://sketchy-tournaments.biz",
     contactPerson: "John Doe",
     contactNumber: "+65 1222 2212",
+    phone: "83456789",
     description:
       "We run totally legitimate tournaments with guaranteed prize pools. Trust us.",
   },
@@ -116,6 +123,7 @@ const DEMO_SUSPENDED = {
   username: "banned_user",
   displayName: "BannedUser",
   bio: "This account has been suspended by an admin.",
+  phone: "86789012",
 };
 
 // ─────────────────────────────────────────
@@ -141,6 +149,7 @@ async function main() {
         email: adminEmail,
         role: Role.ADMIN,
         status: AccountStatus.APPROVED,
+        phone: "98887766",
       },
     });
     console.log(`Admin: ${adminEmail}`);
@@ -161,7 +170,6 @@ async function main() {
     { name: "League of Legends", slug: "league-of-legends", category: "MOBA" },
     { name: "Dota 2", slug: "dota-2", category: "MOBA" },
     { name: "Mobile Legends: Bang Bang", slug: "mobile-legends-bang-bang", category: "MOBA" },
-    { name: "Apex Legends", slug: "apex-legends", category: "Battle Royale" },
     { name: "Fortnite", slug: "fortnite", category: "Battle Royale" },
     { name: "Call of Duty: Warzone", slug: "call-of-duty-warzone", category: "Battle Royale" },
     { name: "Street Fighter 6", slug: "street-fighter-6", category: "Fighting" },
@@ -169,9 +177,6 @@ async function main() {
     { name: "Super Smash Bros. Ultimate", slug: "super-smash-bros-ultimate", category: "Fighting" },
     { name: "EA Sports FC", slug: "ea-sports-fc", category: "Sports" },
     { name: "NBA 2K", slug: "nba-2k", category: "Sports" },
-    { name: "Genshin Impact", slug: "genshin-impact", category: "RPG" },
-    { name: "Final Fantasy XIV", slug: "final-fantasy-xiv", category: "RPG" },
-    { name: "Minecraft", slug: "minecraft", category: "Sandbox" },
     { name: "Rocket League", slug: "rocket-league", category: "Sports" },
   ];
 
@@ -206,6 +211,7 @@ async function main() {
         email: gamer.email,
         role: Role.GAMER,
         status: AccountStatus.APPROVED,
+        phone: gamer.phone,
         gamer_profile: {
           create: {
             username: gamer.username,
@@ -251,6 +257,7 @@ async function main() {
         email: org.email,
         role: Role.ORGANISER,
         status: org.status,
+        phone: org.phone,
         organiser_profile: {
           create: {
             organisation_name: org.organisationName,
@@ -291,6 +298,7 @@ async function main() {
         email: DEMO_SUSPENDED.email,
         role: Role.GAMER,
         status: AccountStatus.SUSPENDED,
+        phone: DEMO_SUSPENDED.phone,
         gamer_profile: {
           create: {
             username: DEMO_SUSPENDED.username,
@@ -320,11 +328,6 @@ async function main() {
     shadowblade: [
       { slug: "valorant", inGameRole: "Duelist" },
       { slug: "counter-strike-2", inGameRole: "AWPer" },
-      { slug: "apex-legends", inGameRole: "Fragger" },
-    ],
-    pixelwitch: [
-      { slug: "minecraft", inGameRole: "Crafter" },
-      { slug: "genshin-impact", inGameRole: "Explorer" },
     ],
     dragonlord: [
       { slug: "dota-2", inGameRole: "Mid" },
@@ -337,8 +340,6 @@ async function main() {
       { slug: "super-smash-bros-ultimate" },
     ],
     lunarmage: [
-      { slug: "final-fantasy-xiv", inGameRole: "Healer" },
-      { slug: "genshin-impact", inGameRole: "Explorer" },
       { slug: "rocket-league", inGameRole: "Casual" },
     ],
   };
@@ -389,7 +390,7 @@ async function main() {
     }
   }
 
-  // Summary Report
+  // Things done so far
   console.log("\n" + "=" .repeat(50));
   console.log(`  Created: ${created}  |  Skipped: ${skipped}  |  Total: ${created + skipped}`);
   console.log("\n Demo login flow:");

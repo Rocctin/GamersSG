@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import apiClient from "@/lib/api-client";
 import { toast } from "sonner";
-import { Loader2, Search, Ban, UserCheck } from "lucide-react";
+import { Loader2, Search, Ban, UserCheck, ArrowUpDown, Trash2 } from "lucide-react";
 
 interface UserRow {
   id: string;
@@ -32,14 +32,22 @@ export function UserManagementTable() {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [meta, setMeta] = useState({ total: 0, page: 1, totalPages: 1 });
+
+  // Delete modal state
+  const [deleteModal, setDeleteModal] = useState<{ id: string; email: string } | null>(null);
+  const [deleteReason, setDeleteReason] = useState("");
 
   const fetchUsers = async (page = 1) => {
     setIsLoading(true);
     try {
       const params: Record<string, string | number> = { page, pageSize: 20 };
       if (search) params.search = search;
+      if (roleFilter) params.role = roleFilter;
+      if (statusFilter) params.status = statusFilter;
       const { data } = await apiClient.get("/admin/users", { params });
       setUsers(data.data ?? []);
       setMeta(data.meta ?? { total: 0, page: 1, totalPages: 1 });
@@ -52,7 +60,6 @@ export function UserManagementTable() {
 
   useEffect(() => {
     fetchUsers();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleSearch = (e: React.FormEvent) => {
@@ -82,11 +89,41 @@ export function UserManagementTable() {
     }
   };
 
+  const handleRoleChange = async (userId: string, newRole: string) => {
+    if (!confirm(`Change this user's role to ${newRole}?`)) return;
+    setActionLoading(userId);
+    try {
+      await apiClient.put(`/admin/users/${userId}/role`, { role: newRole });
+      toast.success(`User role changed to ${newRole}`);
+      fetchUsers(meta.page);
+    } catch (err: any) {
+      toast.error(err.response?.data?.error?.message || "Failed to change role");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleHardDelete = async () => {
+    if (!deleteModal || !deleteReason.trim()) return;
+    setActionLoading(deleteModal.id);
+    try {
+      await apiClient.delete(`/admin/users/${deleteModal.id}`, { data: { reason: deleteReason } });
+      toast.success(`User "${deleteModal.email}" permanently deleted`);
+      setDeleteModal(null);
+      setDeleteReason("");
+      fetchUsers(meta.page);
+    } catch (err: any) {
+      toast.error(err.response?.data?.error?.message || "Failed to delete user");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   return (
     <div>
-      {/* Search bar */}
-      <form onSubmit={handleSearch} className="mb-4">
-        <div className="relative">
+      {/* Search + Filters */}
+      <form onSubmit={handleSearch} className="mb-4 flex gap-3">
+        <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
           <input
             type="text"
@@ -96,6 +133,30 @@ export function UserManagementTable() {
             className="w-full pl-10 pr-4 py-2 bg-surface-800 border border-surface-700 rounded-lg text-sm text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-brand-500 transition-colors"
           />
         </div>
+        <select
+          value={roleFilter}
+          onChange={(e) => { setRoleFilter(e.target.value); fetchUsers(1); }}
+          className="px-3 py-2 bg-surface-800 border border-surface-700 rounded-lg text-sm text-slate-200 focus:outline-none focus:border-brand-500"
+        >
+          <option value="">All Roles</option>
+          <option value="GAMER">Gamer</option>
+          <option value="ORGANISER">Organiser</option>
+          <option value="ADMIN">Admin</option>
+        </select>
+        <select
+          value={statusFilter}
+          onChange={(e) => { setStatusFilter(e.target.value); fetchUsers(1); }}
+          className="px-3 py-2 bg-surface-800 border border-surface-700 rounded-lg text-sm text-slate-200 focus:outline-none focus:border-brand-500"
+        >
+          <option value="">All Statuses</option>
+          <option value="APPROVED">Approved</option>
+          <option value="PENDING">Pending</option>
+          <option value="SUSPENDED">Suspended</option>
+          <option value="REJECTED">Rejected</option>
+        </select>
+        <button type="submit" className="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium rounded-lg transition-colors">
+          Search
+        </button>
       </form>
 
       {isLoading ? (
@@ -157,17 +218,34 @@ export function UserManagementTable() {
                       {new Date(user.createdAt).toLocaleDateString("en-SG")}
                     </td>
                     <td className="py-3 px-4">
-                      <div className="flex items-center justify-end gap-2">
+                      <div className="flex items-center justify-end gap-1.5">
+                        {/* Role change (only for non-admin users) */}
+                        {user.role !== "ADMIN" && (
+                          <button
+                            onClick={() =>
+                              handleRoleChange(
+                                user.id,
+                                user.role === "GAMER" ? "ORGANISER" : "GAMER"
+                              )
+                            }
+                            disabled={actionLoading === user.id}
+                            className="p-1.5 rounded-lg bg-surface-800 text-slate-400 hover:bg-surface-700 hover:text-slate-200 transition-colors disabled:opacity-50"
+                            title={`Change role to ${user.role === "GAMER" ? "ORGANISER" : "GAMER"}`}
+                          >
+                            <ArrowUpDown className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                        {/* Suspend / Reinstate */}
                         {user.status === "SUSPENDED" ? (
                           <button
                             onClick={() =>
                               handleStatusUpdate(user.id, "APPROVED")
                             }
                             disabled={actionLoading === user.id}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-500/10 text-green-400 border border-green-500/20 hover:bg-green-500/20 transition-colors disabled:opacity-50"
+                            className="p-1.5 rounded-lg bg-green-500/10 text-green-400 hover:bg-green-500/20 transition-colors disabled:opacity-50"
+                            title="Reinstate"
                           >
                             <UserCheck className="h-3.5 w-3.5" />
-                            Reinstate
                           </button>
                         ) : (
                           <button
@@ -177,7 +255,7 @@ export function UserManagementTable() {
                             disabled={
                               actionLoading === user.id || user.role === "ADMIN"
                             }
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition-colors disabled:opacity-50"
+                            className="p-1.5 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors disabled:opacity-50"
                             title={
                               user.role === "ADMIN"
                                 ? "Cannot suspend admin accounts"
@@ -185,7 +263,17 @@ export function UserManagementTable() {
                             }
                           >
                             <Ban className="h-3.5 w-3.5" />
-                            Suspend
+                          </button>
+                        )}
+                        {/* Hard Delete (only for non-admin users) */}
+                        {user.role !== "ADMIN" && (
+                          <button
+                            onClick={() => setDeleteModal({ id: user.id, email: user.email })}
+                            disabled={actionLoading === user.id}
+                            className="p-1.5 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors disabled:opacity-50"
+                            title="Permanently delete user"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
                           </button>
                         )}
                       </div>
@@ -195,6 +283,12 @@ export function UserManagementTable() {
               </tbody>
             </table>
           </div>
+
+          {users.length === 0 && (
+            <div className="text-center py-12">
+              <p className="text-slate-500 text-sm">No users found.</p>
+            </div>
+          )}
 
           {/* Pagination */}
           {meta.totalPages > 1 && (
@@ -222,6 +316,30 @@ export function UserManagementTable() {
             </div>
           )}
         </>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/60" onClick={() => { setDeleteModal(null); setDeleteReason(""); }} />
+          <div className="relative bg-surface-900 border border-surface-800 rounded-xl p-6 w-full max-w-md mx-4 shadow-2xl">
+            <h3 className="text-lg font-semibold text-slate-100 mb-1">Permanently Delete User</h3>
+            <p className="text-sm text-slate-400 mb-1">This action is irreversible. All user data will be removed.</p>
+            <p className="text-sm font-medium text-red-400 mb-4">User: {deleteModal.email}</p>
+            <textarea value={deleteReason} onChange={(e) => setDeleteReason(e.target.value)}
+              placeholder="Reason for deletion..."
+              rows={3}
+              className="w-full px-4 py-2.5 bg-surface-800 border border-surface-700 rounded-lg text-sm text-slate-200 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-red-500 resize-vertical mb-4" />
+            <div className="flex items-center justify-end gap-3">
+              <button onClick={() => { setDeleteModal(null); setDeleteReason(""); }} disabled={actionLoading === deleteModal.id}
+                className="text-sm font-medium text-slate-400 hover:text-slate-200 px-4 py-2 rounded-lg border border-surface-700 hover:border-surface-600 transition-colors">Cancel</button>
+              <button onClick={handleHardDelete} disabled={actionLoading === deleteModal.id || !deleteReason.trim()}
+                className="text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:bg-surface-700 disabled:text-slate-500 disabled:cursor-not-allowed px-4 py-2 rounded-lg transition-colors">
+                {actionLoading === deleteModal.id ? <Loader2 className="h-4 w-4 animate-spin inline" /> : null} Delete Permanently
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

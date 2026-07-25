@@ -53,13 +53,34 @@ enum AuditAction {
 
   // Tournaments & Events
   TOURNAMENT_CREATED
+  TOURNAMENT_SUBMITTED
   TOURNAMENT_APPROVED
   TOURNAMENT_REJECTED
   TOURNAMENT_CANCELLED
+  TOURNAMENT_UPDATED
+  TOURNAMENT_DELETED
   EVENT_CREATED
+  EVENT_SUBMITTED
   EVENT_APPROVED
   EVENT_REJECTED
   EVENT_CANCELLED
+  EVENT_UPDATED
+  EVENT_DELETED
+
+  // Games
+  GAME_CREATED
+  GAME_UPDATED
+  GAME_DELETED
+
+  // Teams
+  TEAM_UPDATED
+  TEAM_DELETED
+
+  // Connections
+  CONNECTION_REMOVED
+
+  // User management
+  USER_ROLE_CHANGED
 }
 
 enum TournamentFormat {
@@ -91,6 +112,29 @@ enum RegistrationStatus {
   ATTENDED
 }
 
+enum ConnectionStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+enum TeamMemberRole {
+  CAPTAIN
+  MEMBER
+}
+
+enum TeamStatus {
+  ACTIVE
+  DISBANDED
+}
+
+enum TeamInviteStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
 // ─────────────────────────────────────────
 // USERS
 // Core identity record for all roles.
@@ -108,6 +152,9 @@ model User {
   nric_hash   String?       @unique  // bcrypt/SHA-256 one-way hash, never plaintext
   legal_name  String?                // from Myinfo, not publicly displayed by default
 
+  // Contact
+  phone       String?                // SG local number (8 digits), always prefixed +65 on display
+
   created_at  DateTime      @default(now()) @db.Timestamptz
   updated_at  DateTime      @updatedAt @db.Timestamptz
 
@@ -122,6 +169,12 @@ model User {
   tournament_registrations TournamentRegistration[]
   organised_events        Event[]           @relation("EventOrganiser")
   event_registrations     EventRegistration[]
+  sent_connections         Connection[]      @relation("ConnectionRequester")
+  received_connections     Connection[]      @relation("ConnectionAddressee")
+  team_memberships         TeamMember[]
+  team_invites_received    TeamInvite[]      @relation("TeamInviteInvitee")
+  team_invites_sent        TeamInvite[]      @relation("TeamInviteInviter")
+  created_teams            Team[]            @relation("TeamCreator")
 
   @@index([email])
   @@index([role, status])
@@ -215,6 +268,7 @@ model Game {
 
   gamer_profiles GamerProfileGame[]
   tournaments    Tournament[]
+  team_games     TeamGame[]
 
   @@index([slug])
   @@index([category])
@@ -284,6 +338,7 @@ model TournamentRegistration {
   user_id       String             @db.Uuid
   user          User               @relation(fields: [user_id], references: [id], onDelete: Cascade)
   team_id       String?            @db.Uuid
+  team          Team?              @relation(fields: [team_id], references: [id], onDelete: SetNull)
   status        RegistrationStatus @default(PENDING)
   registered_at DateTime           @default(now()) @db.Timestamptz
   checked_in_at DateTime?          @db.Timestamptz
@@ -350,6 +405,104 @@ model EventRegistration {
   @@index([user_id])
   @@index([status])
   @@map("event_registrations")
+}
+
+// ─────────────────────────────────────────
+// CONNECTIONS
+// Bidirectional (LinkedIn-style) social connections.
+// requester sends → addressee accepts/rejects.
+// Once ACCEPTED, both are mutually connected.
+// ─────────────────────────────────────────
+
+model Connection {
+  id            String           @id @default(uuid()) @db.Uuid
+  requester_id  String           @db.Uuid
+  requester     User             @relation("ConnectionRequester", fields: [requester_id], references: [id], onDelete: Cascade)
+  addressee_id  String           @db.Uuid
+  addressee     User             @relation("ConnectionAddressee", fields: [addressee_id], references: [id], onDelete: Cascade)
+  status        ConnectionStatus @default(PENDING)
+  created_at    DateTime         @default(now()) @db.Timestamptz
+  updated_at    DateTime         @updatedAt @db.Timestamptz
+
+  @@unique([requester_id, addressee_id])
+  @@index([addressee_id, status])
+  @@index([requester_id, status])
+  @@map("connections")
+}
+
+// ─────────────────────────────────────────
+// TEAMS
+// Team profiles with roster management.
+// Created by GAMER users; the creator becomes CAPTAIN.
+// Teams can register for tournaments (team-based).
+// ─────────────────────────────────────────
+
+model Team {
+  id           String     @id @default(uuid()) @db.Uuid
+  name         String
+  tag          String     @unique // short, max 6 chars, e.g. "T1", "PRX"
+  description  String?    @db.Text
+  logo_url     String?
+  banner_url   String?
+  is_recruiting Boolean  @default(true)
+  status       TeamStatus @default(ACTIVE)
+  created_by   String     @db.Uuid
+  creator      User       @relation("TeamCreator", fields: [created_by], references: [id])
+
+  created_at   DateTime   @default(now()) @db.Timestamptz
+  updated_at   DateTime   @updatedAt @db.Timestamptz
+
+  members                   TeamMember[]
+  games                     TeamGame[]
+  invites                   TeamInvite[]
+  tournament_registrations  TournamentRegistration[]
+
+  @@index([tag])
+  @@index([status])
+  @@index([created_by])
+  @@map("teams")
+}
+
+model TeamMember {
+  team_id  String          @db.Uuid
+  team     Team            @relation(fields: [team_id], references: [id], onDelete: Cascade)
+  user_id  String          @db.Uuid
+  user     User            @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  role     TeamMemberRole  @default(MEMBER)
+  joined_at DateTime       @default(now()) @db.Timestamptz
+  left_at   DateTime?      @db.Timestamptz // null = still active
+
+  @@id([team_id, user_id])
+  @@index([user_id])
+  @@map("team_members")
+}
+
+model TeamInvite {
+  id         String           @id @default(uuid()) @db.Uuid
+  team_id    String           @db.Uuid
+  team       Team             @relation(fields: [team_id], references: [id], onDelete: Cascade)
+  inviter_id String           @db.Uuid
+  inviter    User             @relation("TeamInviteInviter", fields: [inviter_id], references: [id])
+  invitee_id String           @db.Uuid
+  invitee    User             @relation("TeamInviteInvitee", fields: [invitee_id], references: [id], onDelete: Cascade)
+  status     TeamInviteStatus @default(PENDING)
+  created_at DateTime         @default(now()) @db.Timestamptz
+  updated_at DateTime         @updatedAt @db.Timestamptz
+
+  @@unique([team_id, invitee_id])
+  @@index([invitee_id, status])
+  @@index([team_id, status])
+  @@map("team_invites")
+}
+
+model TeamGame {
+  team_id String @db.Uuid
+  team    Team   @relation(fields: [team_id], references: [id], onDelete: Cascade)
+  game_id String @db.Uuid
+  game    Game   @relation(fields: [game_id], references: [id], onDelete: Cascade)
+
+  @@id([team_id, game_id])
+  @@map("team_games")
 }
 
 // ─────────────────────────────────────────

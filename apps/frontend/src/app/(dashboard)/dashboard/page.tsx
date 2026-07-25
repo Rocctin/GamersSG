@@ -1,9 +1,14 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { WelcomeCard } from "@/components/dashboard/welcome-card";
+import { CompletenessIndicator } from "@/components/profile/completeness-indicator";
+import { PeopleYouMayKnowWidget } from "@/components/discovery/people-you-may-know";
 import { useAuth } from "@/hooks/use-auth";
+import apiClient from "@/lib/api-client";
 import Link from "next/link";
 import { ArrowRight, Gamepad2, Trophy, Users, Sword, Info, Building2, UsersRound } from "lucide-react";
+import type { ProfileCompletenessDto } from "@gamers-sg/shared/dto";
 
 const QUICK_LINKS = [
   {
@@ -21,7 +26,7 @@ const QUICK_LINKS = [
   {
     label: "Find Teams",
     description: "Discover teams looking for players like you",
-    href: "#",
+    href: "/teams",
     icon: Users,
   },
   {
@@ -46,11 +51,58 @@ const QUICK_LINKS = [
 
 export default function DashboardPage() {
   const { user } = useAuth();
+  const [profileCompleteness, setProfileCompleteness] =
+    useState<ProfileCompletenessDto | null>(null);
+
+  // Fetch profile completeness for GAMER users
+  useEffect(() => {
+    if (user?.role !== "GAMER" || !user?.gamerProfile?.username) return;
+    let cancelled = false;
+    async function fetchCompleteness() {
+      try {
+        const { data } = await apiClient.get(
+          `/users/by-username/${user!.gamerProfile!.username}`,
+        );
+        if (!cancelled && data.success?.data?.profileCompleteness) {
+          setProfileCompleteness(data.success.data.profileCompleteness);
+        }
+      } catch {
+        // Non-critical
+      }
+    }
+    fetchCompleteness();
+    return () => { cancelled = true; };
+  }, [user]);
 
   return (
     <div className="space-y-6">
       {/* Welcome & Stats Card */}
       <WelcomeCard />
+
+      {/* Profile Completeness — shown to GAMER users */}
+      {user?.role === "GAMER" && profileCompleteness && (
+        <div className="max-w-xl">
+          <CompletenessIndicator completeness={profileCompleteness} />
+        </div>
+      )}
+
+      {/* People You May Know */}
+      {user?.role === "GAMER" && (
+        <div className="bg-surface-900 border border-surface-800 rounded-xl p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">
+              People You May Know
+            </h2>
+            <Link
+              href="/discover"
+              className="text-xs text-brand-500 hover:text-brand-400 transition-colors"
+            >
+              View all
+            </Link>
+          </div>
+          <PeopleYouMayKnowWidget compact maxItems={5} />
+        </div>
+      )}
 
       {/* Become an Organiser CTA — shown to GAMER users without an organiser profile */}
       {user?.role === "GAMER" && !user?.organiserProfile && (

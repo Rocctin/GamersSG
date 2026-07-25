@@ -1,24 +1,29 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
 import { isAdmin, isOrganiser } from "@/lib/auth";
+import apiClient from "@/lib/api-client";
 import {
   Gamepad2,
   X,
   LayoutDashboard,
   User,
+  Users,
   Settings,
   Info,
   Shield,
-  Users,
   Building2,
   ClipboardList,
   Swords,
   Calendar,
   Trophy,
   UserPlus,
+  Compass,
+  UsersRound,
+  UserRoundCheck,
 } from "lucide-react";
 
 interface NavItem {
@@ -31,6 +36,9 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Profile", href: "/profile", icon: User },
+  { label: "Connections", href: "/connections", icon: Users },
+  { label: "Teams", href: "/teams", icon: UserPlus },
+  { label: "Discover", href: "/discover", icon: Compass },
   { label: "Settings", href: "/settings", icon: Settings },
   { label: "About", href: "/about", icon: Info },
 ];
@@ -39,10 +47,12 @@ const ADMIN_ITEMS: NavItem[] = [
   { label: "Admin Panel", href: "/admin", icon: Shield, adminOnly: true },
   { label: "Users", href: "/admin/users", icon: Users, adminOnly: true },
   { label: "Organisers", href: "/admin/organisers", icon: Building2, adminOnly: true },
-  { label: "Audit Logs", href: "/admin/audit-logs", icon: ClipboardList, adminOnly: true },
+  { label: "Teams", href: "/admin/teams", icon: UsersRound, adminOnly: true },
   { label: "Tournaments", href: "/admin/tournaments", icon: Trophy, adminOnly: true },
   { label: "Events", href: "/admin/events", icon: Calendar, adminOnly: true },
   { label: "Games", href: "/admin/games", icon: Swords, adminOnly: true },
+  { label: "Connections", href: "/admin/connections", icon: UserRoundCheck, adminOnly: true },
+  { label: "Audit Logs", href: "/admin/audit-logs", icon: ClipboardList, adminOnly: true },
 ];
 
 function isActive(href: string, pathname: string): boolean {
@@ -55,6 +65,25 @@ export function Sidebar({ onClose }: { onClose: () => void }) {
   const { user } = useAuth();
   const showAdmin = isAdmin(user);
   const showOrganiser = isOrganiser(user);
+  const [pendingConnectionsCount, setPendingConnectionsCount] = useState(0);
+
+  // Fetch pending connection request count
+  useEffect(() => {
+    if (user?.role !== "GAMER") return;
+    let cancelled = false;
+    async function fetchCount() {
+      try {
+        const { data } = await apiClient.get("/connections/pending-count");
+        if (!cancelled) {
+          setPendingConnectionsCount(data.count || 0);
+        }
+      } catch {
+        // Non-critical
+      }
+    }
+    fetchCount();
+    return () => { cancelled = true; };
+  }, [user]);
 
   return (
     <nav className="flex flex-col h-full">
@@ -85,6 +114,8 @@ export function Sidebar({ onClose }: { onClose: () => void }) {
         <div className="space-y-1">
           {NAV_ITEMS.map((item) => {
             const active = isActive(item.href, pathname);
+            const showBadge =
+              item.href === "/connections" && pendingConnectionsCount > 0;
             return (
               <Link
                 key={item.href}
@@ -97,7 +128,12 @@ export function Sidebar({ onClose }: { onClose: () => void }) {
                 }`}
               >
                 <item.icon className="h-4 w-4" />
-                {item.label}
+                <span className="flex-1">{item.label}</span>
+                {showBadge && (
+                  <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-brand-500 text-white text-[10px] font-bold">
+                    {pendingConnectionsCount}
+                  </span>
+                )}
               </Link>
             );
           })}

@@ -25,6 +25,23 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Public()
+  @Post("register")
+  @HttpCode(HttpStatus.OK)
+  @RateLimit({ windowMinutes: 15, maxAttempts: 5, keyPrefix: "register" })
+  @UseGuards(RateLimitGuard)
+  async register(
+    @Body("email") email: string,
+    @Body("username") username: string,
+    @Body("displayName") displayName: string | undefined,
+    @Body("phone") phone: string | undefined,
+    @Req() req: Request,
+  ) {
+    const ip = (req.ip || req.socket.remoteAddress) ?? "unknown";
+    const userAgent = req.headers["user-agent"] ?? "unknown";
+    return this.authService.register(email, username, displayName, phone, ip, userAgent);
+  }
+
+  @Public()
   @Post("magic-link/request")
   @HttpCode(HttpStatus.OK)
   @UseGuards(RateLimitGuard)

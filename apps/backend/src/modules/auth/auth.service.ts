@@ -1,4 +1,9 @@
-import { Injectable, UnauthorizedException, ForbiddenException } from "@nestjs/common";
+import {
+  Injectable,
+  UnauthorizedException,
+  ForbiddenException,
+  ConflictException,
+} from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
 import { PrismaService } from "../../prisma/prisma.service";
@@ -96,6 +101,148 @@ export class AuthService {
     return response;
   }
 
+  async register(
+    email: string,
+    username: string,
+    displayName: string | undefined,
+    phone: string | undefined,
+    ip: string,
+    userAgent: string,
+  ) {
+    // 1. Validate email format
+    const normalizedEmail = email.toLowerCase().trim();
+    if (!this.isValidEmail(normalizedEmail)) {
+      throw new UnauthorizedException("Invalid email format");
+    }
+
+    // 2. Validate username format (alphanumeric + underscore, 3-30 chars)
+    const trimmedUsername = username.trim();
+    if (!/^[a-zA-Z0-9_]{3,30}$/.test(trimmedUsername)) {
+      throw new UnauthorizedException(
+        "Username must be 3-30 characters and contain only letters, numbers, and underscores",
+      );
+    }
+
+    // 3. Validate phone (optional, SG-only: 8 digits starting with 3/6/8/9)
+    let trimmedPhone: string | null = null;
+    if (phone && phone.trim()) {
+      trimmedPhone = phone.trim();
+      if (!/^[3689]\d{7}$/.test(trimmedPhone)) {
+        throw new UnauthorizedException(
+          "Phone number must be a valid Singapore number (8 digits starting with 3, 6, 8, or 9)",
+        );
+      }
+    }
+
+    // 4. Check if email already has an APPROVED account
+    const existingUser = await this.prisma.user.findUnique({
+      where: { email: normalizedEmail },
+    });
+
+    if (existingUser && existingUser.status === AccountStatus.APPROVED) {
+      throw new ConflictException(
+        "An account with this email already exists. Please sign in instead.",
+      );
+    }
+
+    // 5. Check username uniqueness (on GamerProfile)
+    const existingUsername = await this.prisma.gamerProfile.findUnique({
+      where: { username: trimmedUsername },
+    });
+
+    if (existingUsername) {
+      throw new ConflictException("This username is already taken");
+    }
+
+    // 6. Create or re-use user (PENDING status)
+    let user;
+    if (existingUser) {
+      // Re-use existing PENDING/REJECTED user — update role
+      user = await this.prisma.user.update({
+        where: { id: existingUser.id },
+        data: { role: Role.GAMER, status: AccountStatus.PENDING, phone: trimmedPhone },
+      });
+
+      // Delete any existing gamer profile to recreate
+      await this.prisma.gamerProfile.deleteMany({
+        where: { user_id: user.id },
+      });
+    } else {
+      user = await this.prisma.user.create({
+        data: {
+          email: normalizedEmail,
+          role: Role.GAMER,
+          status: AccountStatus.PENDING,
+          phone: trimmedPhone,
+        },
+      });
+    }
+
+    // 7. Create gamer profile with registration data
+    await this.prisma.gamerProfile.create({
+      data: {
+        user_id: user.id,
+        username: trimmedUsername,
+        display_name: displayName?.trim() || null,
+      },
+    });
+
+    // 8. Generate token
+    const rawToken = crypto.randomBytes(64).toString("hex");
+    const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
+
+    // 9. Invalidate prior unused tokens for this user
+    await this.prisma.authToken.updateMany({
+      where: {
+        user_id: user.id,
+        used_at: null,
+        expires_at: { gt: new Date() },
+      },
+      data: { used_at: new Date() },
+    });
+
+    // 10. Store AuthToken
+    const expiresAt = new Date(
+      Date.now() + AUTH.MAGIC_LINK_EXPIRY_MINUTES * 60 * 1000,
+    );
+
+    await this.prisma.authToken.create({
+      data: {
+        user_id: user.id,
+        token_hash: tokenHash,
+        expires_at: expiresAt,
+        request_ip: ip,
+        user_agent: userAgent,
+      },
+    });
+
+    // 11. Send email
+    await this.emailService.sendMagicLinkEmail(normalizedEmail, rawToken);
+
+    // 12. Audit
+    await this.auditService.log({
+      actorId: user.id,
+      action: AuditAction.MAGIC_LINK_SENT,
+      targetType: "auth",
+      ipAddress: ip,
+      metadata: { type: "registration", username: trimmedUsername },
+    });
+
+    // 13. Return
+    const response: { message: string; devMagicLink?: string } = {
+      message:
+        "Account created! Check your email for a verification link to activate your account.",
+    };
+
+    // In development, expose the magic link for the developer
+    if (this.configService.get<string>("NODE_ENV") === "development") {
+      const frontendUrl = this.configService.get<string>("FRONTEND_URL");
+      response.devMagicLink = `${frontendUrl}/verify?token=${rawToken}`;
+    }
+
+    return response;
+  }
+
   async verifyMagicLink(rawToken: string) {
     // 1. Hash the raw token
     const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
@@ -124,7 +271,15 @@ export class AuthService {
       throw new ForbiddenException("Account is suspended");
     }
 
-    // 5. Mark token used
+    // 5. Auto-approve PENDING users (registration flow)
+    if (user.status === AccountStatus.PENDING) {
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { status: AccountStatus.APPROVED },
+      });
+    }
+
+    // 6. Mark token used
     await this.prisma.authToken.update({
       where: { id: authToken.id },
       data: { used_at: new Date() },
@@ -259,6 +414,7 @@ export class AuthService {
       email: user.email,
       role: user.role,
       status: user.status,
+      phone: user.phone,
       createdAt: user.created_at.toISOString(),
       gamerProfile: user.gamer_profile
         ? {

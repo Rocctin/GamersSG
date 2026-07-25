@@ -2,6 +2,8 @@ import {
   Controller,
   Get,
   Post,
+  Put,
+  Delete,
   Body,
   Param,
   Query,
@@ -96,5 +98,127 @@ export class AdminTournamentsController {
       rejectionReason,
       ip,
     );
+  }
+
+  // ── Tournament Management ──
+
+  @Get("tournaments")
+  @HttpCode(HttpStatus.OK)
+  async listAllTournaments(
+    @Query("status") status?: string,
+    @Query("search") search?: string,
+    @Query("gameId") gameId?: string,
+    @Query("page") page?: string,
+    @Query("pageSize") pageSize?: string,
+  ) {
+    return this.tournamentsService.adminListAllTournaments({
+      status,
+      search,
+      gameId,
+      page: page ? parseInt(page) : undefined,
+      pageSize: pageSize ? parseInt(pageSize) : undefined,
+    });
+  }
+
+  @Put("tournaments/:id")
+  @HttpCode(HttpStatus.OK)
+  async updateTournament(
+    @CurrentUser() admin: JwtPayload,
+    @Param("id") id: string,
+    @Body() body: any,
+  ) {
+    return this.tournamentsService.updateTournament(id, body, admin.sub);
+  }
+
+  @Post("tournaments/:id/status")
+  @HttpCode(HttpStatus.OK)
+  async updateTournamentStatus(
+    @CurrentUser() admin: JwtPayload,
+    @Param("id") id: string,
+    @Body("status") status?: string,
+    @Body("reason") reason?: string,
+    @Req() req?: Request,
+  ) {
+    if (!status) {
+      throw new BadRequestException("Status is required");
+    }
+    const ip = (req?.ip || req?.socket?.remoteAddress) ?? undefined;
+    return this.tournamentsService.adminUpdateTournamentStatus(id, admin.sub, status, reason, ip);
+  }
+
+  @Delete("tournaments/:id")
+  @HttpCode(HttpStatus.OK)
+  async deleteTournament(
+    @CurrentUser() admin: JwtPayload,
+    @Param("id") id: string,
+    @Body("reason") reason?: string,
+    @Req() req?: Request,
+  ) {
+    if (!reason?.trim()) {
+      throw new BadRequestException("Reason is required for hard deletion");
+    }
+    const ip = (req?.ip || req?.socket?.remoteAddress) ?? undefined;
+    return this.tournamentsService.adminDeleteTournament(id, admin.sub, reason, ip);
+  }
+
+  // ── Event Management ──
+
+  @Get("events")
+  @HttpCode(HttpStatus.OK)
+  async listAllEvents(
+    @Query("status") status?: string,
+    @Query("search") search?: string,
+    @Query("eventType") eventType?: string,
+    @Query("page") page?: string,
+    @Query("pageSize") pageSize?: string,
+  ) {
+    return this.tournamentsService.adminListAllEvents({
+      status,
+      search,
+      eventType,
+      page: page ? parseInt(page) : undefined,
+      pageSize: pageSize ? parseInt(pageSize) : undefined,
+    });
+  }
+
+  @Put("events/:id")
+  @HttpCode(HttpStatus.OK)
+  async updateEvent(
+    @CurrentUser() admin: JwtPayload,
+    @Param("id") id: string,
+    @Body() body: any,
+  ) {
+    return this.tournamentsService.updateEvent(id, body, admin.sub);
+  }
+
+  @Post("events/:id/status")
+  @HttpCode(HttpStatus.OK)
+  async updateEventStatus(
+    @CurrentUser() admin: JwtPayload,
+    @Param("id") id: string,
+    @Body("status") status?: string,
+    @Body("reason") reason?: string,
+    @Req() req?: Request,
+  ) {
+    if (!status) {
+      throw new BadRequestException("Status is required");
+    }
+    const ip = (req?.ip || req?.socket?.remoteAddress) ?? undefined;
+    return this.tournamentsService.adminUpdateEventStatus(id, admin.sub, status, reason, ip);
+  }
+
+  @Delete("events/:id")
+  @HttpCode(HttpStatus.OK)
+  async deleteEvent(
+    @CurrentUser() admin: JwtPayload,
+    @Param("id") id: string,
+    @Body("reason") reason?: string,
+    @Req() req?: Request,
+  ) {
+    if (!reason?.trim()) {
+      throw new BadRequestException("Reason is required for hard deletion");
+    }
+    const ip = (req?.ip || req?.socket?.remoteAddress) ?? undefined;
+    return this.tournamentsService.adminDeleteEvent(id, admin.sub, reason, ip);
   }
 }

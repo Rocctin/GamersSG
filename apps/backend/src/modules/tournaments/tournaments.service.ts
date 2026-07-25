@@ -232,13 +232,15 @@ export class TournamentsService {
     });
     if (!tournament) throw new NotFoundException("Tournament not found");
 
-    // Only the creator can update
-    if (tournament.organiser_id !== userId) {
+    // Only the creator can update (admins can update any)
+    const isAdmin = await this.isAdminUser(userId);
+    if (tournament.organiser_id !== userId && !isAdmin) {
       throw new ForbiddenException("You can only update your own tournaments");
     }
 
-    // Only DRAFT or REJECTED tournaments can be edited
+    // Only DRAFT or REJECTED tournaments can be edited (admins can edit any)
     if (
+      !isAdmin &&
       tournament.status !== "DRAFT" &&
       tournament.status !== "REJECTED"
     ) {
@@ -268,7 +270,8 @@ export class TournamentsService {
       where: { id: tournamentId },
     });
     if (!tournament) throw new NotFoundException("Tournament not found");
-    if (tournament.organiser_id !== userId) {
+    const isAdmin = await this.isAdminUser(userId);
+    if (tournament.organiser_id !== userId && !isAdmin) {
       throw new ForbiddenException("You can only submit your own tournaments");
     }
     if (!canTransition(tournament.status, "PENDING_REVIEW")) {
@@ -284,7 +287,7 @@ export class TournamentsService {
 
     await this.auditService.log({
       actorId: userId,
-      action: AuditAction.TOURNAMENT_CREATED,
+      action: AuditAction.TOURNAMENT_SUBMITTED,
       targetId: tournamentId,
       targetType: "tournament",
       metadata: { transition: `${tournament.status} → PENDING_REVIEW` },
@@ -719,10 +722,15 @@ export class TournamentsService {
   async updateEvent(eventId: string, dto: UpdateEventDto, userId: string) {
     const event = await this.prisma.event.findUnique({ where: { id: eventId } });
     if (!event) throw new NotFoundException("Event not found");
-    if (event.organiser_id !== userId) {
+    const isAdmin = await this.isAdminUser(userId);
+    if (event.organiser_id !== userId && !isAdmin) {
       throw new ForbiddenException("You can only update your own events");
     }
-    if (event.status !== "DRAFT" && event.status !== "REJECTED") {
+    if (
+      !isAdmin &&
+      event.status !== "DRAFT" &&
+      event.status !== "REJECTED"
+    ) {
       throw new BadRequestException("Only draft or rejected events can be edited");
     }
 
@@ -752,7 +760,8 @@ export class TournamentsService {
   async submitEvent(eventId: string, userId: string, ip?: string) {
     const event = await this.prisma.event.findUnique({ where: { id: eventId } });
     if (!event) throw new NotFoundException("Event not found");
-    if (event.organiser_id !== userId) {
+    const isAdmin = await this.isAdminUser(userId);
+    if (event.organiser_id !== userId && !isAdmin) {
       throw new ForbiddenException("You can only submit your own events");
     }
     if (!canTransition(event.status, "PENDING_REVIEW")) {
@@ -768,7 +777,7 @@ export class TournamentsService {
 
     await this.auditService.log({
       actorId: userId,
-      action: AuditAction.EVENT_CREATED,
+      action: AuditAction.EVENT_SUBMITTED,
       targetId: eventId,
       targetType: "event",
       metadata: { transition: `${event.status} → PENDING_REVIEW` },
@@ -1017,6 +1026,236 @@ export class TournamentsService {
     });
 
     return { success: true, data: this.mapEvent(updated) };
+  }
+
+  // ════════════════════════════════════════════
+  // TOURNAMENTS — Admin Full Management
+  // ════════════════════════════════════════════
+
+  async adminListAllTournaments(filters: {
+    status?: string;
+    search?: string;
+    gameId?: string;
+    page?: number;
+    pageSize?: number;
+  }) {
+    const page = filters.page ?? 1;
+    const pageSize = filters.pageSize ?? PAGINATION.DEFAULT_PAGE_SIZE;
+    const skip = (page - 1) * pageSize;
+
+    const where: Prisma.TournamentWhereInput = {};
+    if (filters.status) {
+      where.status = filters.status as TournamentStatus;
+    }
+    if (filters.search) {
+      where.name = { contains: filters.search, mode: "insensitive" };
+    }
+    if (filters.gameId) {
+      where.game_id = filters.gameId;
+    }
+
+    const [tournaments, total] = await Promise.all([
+      this.prisma.tournament.findMany({
+        where,
+        skip,
+        take: pageSize,
+        orderBy: { created_at: "desc" },
+        include: {
+          game: { select: { id: true, name: true, slug: true, cover_image: true } },
+          organiser: {
+            select: {
+              id: true,
+              email: true,
+              organiser_profile: { select: { organisation_name: true } },
+            },
+          },
+          _count: { select: { registrations: true } },
+        },
+      }),
+      this.prisma.tournament.count({ where }),
+    ]);
+
+    return {
+      success: true,
+      data: tournaments.map((t) => this.mapTournament(t)),
+      meta: { total, page, pageSize, totalPages: Math.ceil(total / pageSize) },
+    };
+  }
+
+  async adminDeleteTournament(
+    tournamentId: string,
+    adminId: string,
+    reason: string,
+    ip?: string,
+  ) {
+    const tournament = await this.prisma.tournament.findUnique({
+      where: { id: tournamentId },
+    });
+    if (!tournament) throw new NotFoundException("Tournament not found");
+
+    // Delete registrations first, then tournament
+    await this.prisma.$transaction([
+      this.prisma.tournamentRegistration.deleteMany({
+        where: { tournament_id: tournamentId },
+      }),
+      this.prisma.tournament.delete({ where: { id: tournamentId } }),
+    ]);
+
+    await this.auditService.log({
+      actorId: adminId,
+      action: AuditAction.TOURNAMENT_DELETED,
+      targetId: tournamentId,
+      targetType: "tournament",
+      metadata: { tournamentName: tournament.name, reason },
+      ipAddress: ip,
+    });
+
+    return { success: true, message: "Tournament permanently deleted" };
+  }
+
+  async adminUpdateTournamentStatus(
+    tournamentId: string,
+    adminId: string,
+    status: string,
+    reason?: string,
+    ip?: string,
+  ) {
+    const tournament = await this.prisma.tournament.findUnique({
+      where: { id: tournamentId },
+    });
+    if (!tournament) throw new NotFoundException("Tournament not found");
+
+    const previousStatus = tournament.status;
+    const updated = await this.prisma.tournament.update({
+      where: { id: tournamentId },
+      data: { status: status as any },
+    });
+
+    await this.auditService.log({
+      actorId: adminId,
+      action: AuditAction.TOURNAMENT_UPDATED,
+      targetId: tournamentId,
+      targetType: "tournament",
+      metadata: {
+        previousStatus,
+        newStatus: status,
+        reason,
+        tournamentName: tournament.name,
+      },
+      ipAddress: ip,
+    });
+
+    return this.mapTournament(updated);
+  }
+
+  async adminListAllEvents(filters: {
+    status?: string;
+    search?: string;
+    eventType?: string;
+    page?: number;
+    pageSize?: number;
+  }) {
+    const page = filters.page ?? 1;
+    const pageSize = filters.pageSize ?? PAGINATION.DEFAULT_PAGE_SIZE;
+    const skip = (page - 1) * pageSize;
+
+    const where: Prisma.EventWhereInput = {};
+    if (filters.status) {
+      where.status = filters.status as TournamentStatus;
+    }
+    if (filters.search) {
+      where.name = { contains: filters.search, mode: "insensitive" };
+    }
+    if (filters.eventType) {
+      where.event_type = filters.eventType as any;
+    }
+
+    const [events, total] = await Promise.all([
+      this.prisma.event.findMany({
+        where,
+        skip,
+        take: pageSize,
+        orderBy: { created_at: "desc" },
+        include: {
+          organiser: {
+            select: {
+              id: true,
+              email: true,
+              organiser_profile: { select: { organisation_name: true } },
+            },
+          },
+          _count: { select: { registrations: true } },
+        },
+      }),
+      this.prisma.event.count({ where }),
+    ]);
+
+    return {
+      success: true,
+      data: events.map((e) => this.mapEvent(e)),
+      meta: { total, page, pageSize, totalPages: Math.ceil(total / pageSize) },
+    };
+  }
+
+  async adminDeleteEvent(
+    eventId: string,
+    adminId: string,
+    reason: string,
+    ip?: string,
+  ) {
+    const event = await this.prisma.event.findUnique({ where: { id: eventId } });
+    if (!event) throw new NotFoundException("Event not found");
+
+    await this.prisma.$transaction([
+      this.prisma.eventRegistration.deleteMany({
+        where: { event_id: eventId },
+      }),
+      this.prisma.event.delete({ where: { id: eventId } }),
+    ]);
+
+    await this.auditService.log({
+      actorId: adminId,
+      action: AuditAction.EVENT_DELETED,
+      targetId: eventId,
+      targetType: "event",
+      metadata: { eventName: event.name, reason },
+      ipAddress: ip,
+    });
+
+    return { success: true, message: "Event permanently deleted" };
+  }
+
+  async adminUpdateEventStatus(
+    eventId: string,
+    adminId: string,
+    status: string,
+    reason?: string,
+    ip?: string,
+  ) {
+    const event = await this.prisma.event.findUnique({ where: { id: eventId } });
+    if (!event) throw new NotFoundException("Event not found");
+
+    const previousStatus = event.status;
+    const updated = await this.prisma.event.update({
+      where: { id: eventId },
+      data: { status: status as any },
+    });
+
+    await this.auditService.log({
+      actorId: adminId,
+      action: AuditAction.EVENT_UPDATED,
+      targetId: eventId,
+      targetType: "event",
+      metadata: {
+        previousStatus,
+        newStatus: status,
+        reason,
+        eventName: event.name,
+      },
+      ipAddress: ip,
+    });
+
+    return this.mapEvent(updated);
   }
 
   // ════════════════════════════════════════════

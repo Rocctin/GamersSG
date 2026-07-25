@@ -1,12 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { Users, Building2, ClipboardList, Swords, ArrowRight } from "lucide-react";
+import {
+  Users,
+  Building2,
+  ClipboardList,
+  Swords,
+  UsersRound,
+  Trophy,
+  CalendarDays,
+  UserRoundCheck,
+  ArrowRight,
+} from "lucide-react";
 
 const ADMIN_LINKS = [
   {
     label: "Manage Users",
-    description: "View, search, and manage all platform users. Suspend or reinstate accounts.",
+    description: "View, search, suspend, delete, or change roles for all platform users.",
     href: "/admin/users",
     icon: Users,
   },
@@ -17,16 +27,40 @@ const ADMIN_LINKS = [
     icon: Building2,
   },
   {
+    label: "Teams Management",
+    description: "View all teams, manage rosters, disband or permanently delete teams.",
+    href: "/admin/teams",
+    icon: UsersRound,
+  },
+  {
+    label: "Tournaments",
+    description: "Full tournament lifecycle — review pending, view all, edit, cancel, or delete.",
+    href: "/admin/tournaments",
+    icon: Trophy,
+  },
+  {
+    label: "Events",
+    description: "Full event lifecycle — review pending, view all, edit, cancel, or delete.",
+    href: "/admin/events",
+    icon: CalendarDays,
+  },
+  {
+    label: "Games Library",
+    description: "Manage the platform game library. Add, edit, deactivate, or hard-delete games.",
+    href: "/admin/games",
+    icon: Swords,
+  },
+  {
+    label: "Connections",
+    description: "Oversee user connections — search, filter, and remove connections.",
+    href: "/admin/connections",
+    icon: UserRoundCheck,
+  },
+  {
     label: "Audit Logs",
     description: "Review all admin actions for compliance and accountability.",
     href: "/admin/audit-logs",
     icon: ClipboardList,
-  },
-  {
-    label: "Games Library",
-    description: "Manage the platform game library. Add, edit, or disable games.",
-    href: "/admin/games",
-    icon: Swords,
   },
 ];
 
@@ -40,7 +74,7 @@ export default function AdminPage() {
         </p>
       </div>
 
-      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {ADMIN_LINKS.map((link) => (
           <Link
             key={link.label}

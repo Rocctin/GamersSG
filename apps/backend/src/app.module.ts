@@ -10,6 +10,8 @@ import { AdminModule } from "./modules/admin/admin.module";
 import { AuditModule } from "./modules/audit/audit.module";
 import { GamesModule } from "./modules/games/games.module";
 import { TournamentsModule } from "./modules/tournaments/tournaments.module";
+import { ConnectionsModule } from "./modules/connections/connections.module";
+import { TeamsModule } from "./modules/teams/teams.module";
 import { JwtAuthGuard } from "./common/guards/jwt-auth.guard";
 import { RolesGuard } from "./common/guards/roles.guard";
 import { HttpExceptionFilter } from "./common/filters/http-exception.filter";
@@ -34,6 +36,8 @@ import { HttpExceptionFilter } from "./common/filters/http-exception.filter";
     UsersModule,
     AdminModule,
     TournamentsModule,
+    ConnectionsModule,
+    TeamsModule,
   ],
   providers: [
     {

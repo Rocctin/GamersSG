@@ -1,11 +1,27 @@
-import { Injectable, NotFoundException, ConflictException } from "@nestjs/common";
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+  BadRequestException,
+} from "@nestjs/common";
 import { PrismaService } from "../../prisma/prisma.service";
+import { AuditService } from "../audit/audit.service";
+import { AuditAction } from "@gamers-sg/database";
 import { PAGINATION } from "@gamers-sg/shared/constants";
 import type { CreateGameDto, UpdateGameDto } from "@gamers-sg/shared/dto";
 
 @Injectable()
 export class GamesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditService: AuditService,
+  ) {}
+
+  async findBySlug(slug: string) {
+    const game = await this.prisma.game.findUnique({ where: { slug } });
+    if (!game) throw new NotFoundException("Game not found");
+    return game;
+  }
 
   async findAll(
     search?: string,
@@ -61,7 +77,7 @@ export class GamesService {
     return { success: true, data: this.mapGame(game) };
   }
 
-  async create(dto: CreateGameDto) {
+  async create(dto: CreateGameDto, adminId?: string, ip?: string) {
     const slug = dto.slug || this.generateSlug(dto.name);
 
     // Check slug uniqueness
@@ -81,10 +97,21 @@ export class GamesService {
       },
     });
 
+    if (adminId) {
+      await this.auditService.log({
+        actorId: adminId,
+        action: AuditAction.GAME_CREATED,
+        targetId: game.id,
+        targetType: "game",
+        metadata: { name: game.name, slug: game.slug, category: game.category },
+        ipAddress: ip,
+      });
+    }
+
     return { success: true, data: this.mapGame(game) };
   }
 
-  async update(id: string, dto: UpdateGameDto) {
+  async update(id: string, dto: UpdateGameDto, adminId?: string, ip?: string) {
     const existing = await this.prisma.game.findUnique({ where: { id } });
     if (!existing) {
       throw new NotFoundException("Game not found");
@@ -111,10 +138,22 @@ export class GamesService {
       },
     });
 
+    if (adminId) {
+      const changedFields = Object.keys(dto);
+      await this.auditService.log({
+        actorId: adminId,
+        action: AuditAction.GAME_UPDATED,
+        targetId: game.id,
+        targetType: "game",
+        metadata: { name: game.name, changedFields },
+        ipAddress: ip,
+      });
+    }
+
     return { success: true, data: this.mapGame(game) };
   }
 
-  async softDelete(id: string) {
+  async softDelete(id: string, adminId?: string, ip?: string) {
     const existing = await this.prisma.game.findUnique({ where: { id } });
     if (!existing) {
       throw new NotFoundException("Game not found");
@@ -125,7 +164,51 @@ export class GamesService {
       data: { is_active: false },
     });
 
+    if (adminId) {
+      await this.auditService.log({
+        actorId: adminId,
+        action: AuditAction.GAME_UPDATED,
+        targetId: existing.id,
+        targetType: "game",
+        metadata: { name: existing.name, deactivated: true },
+        ipAddress: ip,
+      });
+    }
+
     return { success: true, message: "Game has been deactivated" };
+  }
+
+  async hardDelete(id: string, adminId: string, reason: string, ip?: string) {
+    const game = await this.prisma.game.findUnique({ where: { id } });
+    if (!game) throw new NotFoundException("Game not found");
+
+    // Check if any tournaments reference this game (has required game_id)
+    const tournamentCount = await this.prisma.tournament.count({
+      where: { game_id: id },
+    });
+    if (tournamentCount > 0) {
+      throw new BadRequestException(
+        `Cannot delete game "${game.name}": ${tournamentCount} tournament(s) reference it. Remove or reassign those tournaments first.`,
+      );
+    }
+
+    // Delete profile-game associations first, then the game
+    await this.prisma.$transaction([
+      this.prisma.gamerProfileGame.deleteMany({ where: { game_id: id } }),
+      this.prisma.teamGame.deleteMany({ where: { game_id: id } }),
+      this.prisma.game.delete({ where: { id } }),
+    ]);
+
+    await this.auditService.log({
+      actorId: adminId,
+      action: AuditAction.GAME_DELETED,
+      targetId: id,
+      targetType: "game",
+      metadata: { name: game.name, slug: game.slug, reason },
+      ipAddress: ip,
+    });
+
+    return { success: true, message: `Game "${game.name}" permanently deleted` };
   }
 
   // ── Helpers ──

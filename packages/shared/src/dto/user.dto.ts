@@ -6,6 +6,7 @@ export interface UserProfileDto {
   email: string;
   role: Role;
   status: AccountStatus;
+  phone?: string;
   createdAt: string;
   gamerProfile?: GamerProfileDto;
   organiserProfile?: OrganiserProfileDto;
@@ -17,6 +18,7 @@ export interface GamerProfileDto {
   displayName?: string;
   bio?: string;
   avatarUrl?: string;
+  bannerUrl?: string;
   visibility: string;
   isMember: boolean;
   pointsBalance: number;
@@ -38,6 +40,7 @@ export interface UpdateGamerProfileDto {
   displayName?: string;
   bio?: string;
   avatarUrl?: string;
+  bannerUrl?: string;
   visibility?: "PUBLIC" | "MEMBERS_ONLY" | "PRIVATE";
   gameIds?: { gameId: string; inGameRole?: string }[];
 }

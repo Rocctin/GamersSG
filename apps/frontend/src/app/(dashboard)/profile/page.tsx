@@ -1,23 +1,77 @@
 "use client";
 
+import { useState, useEffect } from "react";
+import Link from "next/link";
 import { useAuth } from "@/hooks/use-auth";
 import { RoleBadge } from "@/components/dashboard/role-badge";
-import { Mail, Calendar, ShieldCheck } from "lucide-react";
+import { CompletenessIndicator } from "@/components/profile/completeness-indicator";
+import apiClient from "@/lib/api-client";
+import { Mail, Calendar, ShieldCheck, Pencil, ExternalLink } from "lucide-react";
 import type { Role } from "@gamers-sg/shared/enums";
+import type { ProfileCompletenessDto } from "@gamers-sg/shared/dto";
 
 export default function ProfilePage() {
   const { user } = useAuth();
+  const [profileCompleteness, setProfileCompleteness] =
+    useState<ProfileCompletenessDto | null>(null);
+
+  useEffect(() => {
+    if (user?.role !== "GAMER" || !user?.gamerProfile?.username) return;
+    let cancelled = false;
+    async function fetchCompleteness() {
+      try {
+        const { data } = await apiClient.get(
+          `/users/by-username/${user!.gamerProfile!.username}`,
+        );
+        if (!cancelled && data.success?.data?.profileCompleteness) {
+          setProfileCompleteness(data.success.data.profileCompleteness);
+        }
+      } catch {
+        // Non-critical
+      }
+    }
+    fetchCompleteness();
+    return () => { cancelled = true; };
+  }, [user]);
 
   if (!user) return null;
 
   return (
     <div className="space-y-6 max-w-2xl">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-100">Profile</h1>
-        <p className="text-slate-400 mt-1">
-          Your account information and public profile.
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-100">Profile</h1>
+          <p className="text-slate-400 mt-1">
+            Your account information and public profile.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {user.gamerProfile?.username && (
+            <Link
+              href={`/u/${user.gamerProfile.username}`}
+              target="_blank"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm text-slate-400 hover:text-slate-200 hover:bg-surface-800 transition-colors"
+            >
+              <ExternalLink className="h-4 w-4" />
+              <span className="hidden sm:inline">View Public</span>
+            </Link>
+          )}
+          {user.role === "GAMER" && (
+            <Link
+              href="/profile/edit"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium transition-colors"
+            >
+              <Pencil className="h-4 w-4" />
+              <span className="hidden sm:inline">Edit Profile</span>
+            </Link>
+          )}
+        </div>
       </div>
+
+      {/* Profile Completeness */}
+      {profileCompleteness && (
+        <CompletenessIndicator completeness={profileCompleteness} />
+      )}
 
       {/* Account Info Card */}
       <div className="bg-surface-900 border border-surface-800 rounded-xl overflow-hidden">

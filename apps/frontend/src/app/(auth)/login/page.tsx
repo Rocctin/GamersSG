@@ -112,6 +112,17 @@ export default function LoginPage() {
                   )}
                 </button>
               </form>
+
+              {/* Link to register */}
+              <p className="text-center text-slate-400 text-sm mt-6">
+                Don&apos;t have an account?{" "}
+                <Link
+                  href="/register"
+                  className="text-brand-500 hover:text-brand-400 transition-colors font-medium"
+                >
+                  Create one
+                </Link>
+              </p>
             </>
           ) : (
             <div className="text-center py-8">

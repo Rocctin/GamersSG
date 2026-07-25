@@ -204,6 +204,9 @@ export class AdminService {
     if (targetUser.id === adminId) {
       throw new BadRequestException("Cannot change your own status");
     }
+    if (targetUser.role === "ADMIN") {
+      throw new BadRequestException("Cannot modify the status of another admin");
+    }
 
     await this.prisma.user.update({
       where: { id: targetUserId },
@@ -252,6 +255,123 @@ export class AdminService {
     return {
       message: `User status updated to ${dto.status}`,
     };
+  }
+
+  async updateUserRole(
+    targetUserId: string,
+    adminId: string,
+    dto: { role: "GAMER" | "ORGANISER" },
+    ipAddress?: string,
+  ) {
+    const targetUser = await this.prisma.user.findUnique({
+      where: { id: targetUserId },
+    });
+    if (!targetUser) throw new NotFoundException("User not found");
+    if (targetUser.id === adminId) {
+      throw new BadRequestException("Cannot change your own role");
+    }
+    if (targetUser.role === "ADMIN") {
+      throw new BadRequestException("Cannot change the role of another admin");
+    }
+
+    const previousRole = targetUser.role;
+
+    await this.prisma.user.update({
+      where: { id: targetUserId },
+      data: { role: dto.role },
+    });
+
+    await this.auditService.log({
+      actorId: adminId,
+      action: AuditAction.USER_ROLE_CHANGED,
+      targetId: targetUserId,
+      targetType: "user",
+      metadata: {
+        previousRole,
+        newRole: dto.role,
+        targetEmail: targetUser.email,
+      },
+      ipAddress,
+    });
+
+    return { message: `User role changed from ${previousRole} to ${dto.role}` };
+  }
+
+  async hardDeleteUser(
+    targetUserId: string,
+    adminId: string,
+    reason: string,
+    ipAddress?: string,
+  ) {
+    const targetUser = await this.prisma.user.findUnique({
+      where: { id: targetUserId },
+      select: { id: true, email: true, role: true },
+    });
+    if (!targetUser) throw new NotFoundException("User not found");
+    if (targetUser.id === adminId) {
+      throw new BadRequestException("Cannot delete your own account");
+    }
+    if (targetUser.role === "ADMIN") {
+      throw new BadRequestException("Cannot delete another admin account");
+    }
+
+    // Log before deletion (audit log references the user)
+    await this.auditService.log({
+      actorId: adminId,
+      action: AuditAction.USER_DELETED,
+      targetId: targetUserId,
+      targetType: "user",
+      metadata: { targetEmail: targetUser.email, reason },
+      ipAddress,
+    });
+
+    // Cascade delete: Prisma handles profiles, tokens, connections,
+    // team memberships, team invites, tournament/event registrations
+    await this.prisma.user.delete({ where: { id: targetUserId } });
+
+    return { message: "User permanently deleted" };
+  }
+
+  async adminUpdateUserProfile(
+    targetUserId: string,
+    adminId: string,
+    dto: {
+      username?: string;
+      displayName?: string;
+      bio?: string;
+      visibility?: "PUBLIC" | "MEMBERS_ONLY" | "PRIVATE";
+    },
+    ipAddress?: string,
+  ) {
+    const targetUser = await this.prisma.user.findUnique({
+      where: { id: targetUserId },
+      include: { gamer_profile: true },
+    });
+    if (!targetUser) throw new NotFoundException("User not found");
+    if (!targetUser.gamer_profile) {
+      throw new BadRequestException("User does not have a gamer profile");
+    }
+
+    const updated = await this.prisma.gamerProfile.update({
+      where: { user_id: targetUserId },
+      data: {
+        ...(dto.username !== undefined && { username: dto.username }),
+        ...(dto.displayName !== undefined && { display_name: dto.displayName }),
+        ...(dto.bio !== undefined && { bio: dto.bio }),
+        ...(dto.visibility !== undefined && { visibility: dto.visibility }),
+      },
+    });
+
+    await this.auditService.log({
+      actorId: adminId,
+      action: AuditAction.USER_STATUS_CHANGED, // Reuse status changed for profile edits
+      targetId: targetUserId,
+      targetType: "user",
+      metadata: { fields: Object.keys(dto), targetEmail: targetUser.email },
+      ipAddress,
+    });
+
+    return { success: true, message: "Profile updated successfully" };
   }
 
   async getAuditLogs(

@@ -12,6 +12,8 @@ import {
   Check,
   X,
   ExternalLink,
+  RotateCcw,
+  Skull,
 } from "lucide-react";
 
 interface GameRow {
@@ -64,6 +66,10 @@ export function AdminGamesTable() {
   const [editName, setEditName] = useState("");
   const [editCategory, setEditCategory] = useState("");
   const [editCoverImage, setEditCoverImage] = useState("");
+
+  // Hard delete modal state
+  const [deleteModal, setDeleteModal] = useState<{ id: string; name: string } | null>(null);
+  const [deleteReason, setDeleteReason] = useState("");
 
   const fetchGames = async (page = 1) => {
     setIsLoading(true);
@@ -169,6 +175,36 @@ export function AdminGamesTable() {
       toast.error(
         err.response?.data?.error?.message || "Failed to deactivate game",
       );
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleReactivate = async (game: GameRow) => {
+    if (!confirm(`Reactivate "${game.name}"? It will be visible in the library again.`)) return;
+    setActionLoading(game.id);
+    try {
+      await apiClient.put(`/games/${game.id}`, { isActive: true });
+      toast.success(`Game "${game.name}" reactivated`);
+      fetchGames(meta.page);
+    } catch (err: any) {
+      toast.error(err.response?.data?.error?.message || "Failed to reactivate game");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleHardDelete = async () => {
+    if (!deleteModal || !deleteReason.trim()) return;
+    setActionLoading(deleteModal.id);
+    try {
+      await apiClient.delete(`/games/${deleteModal.id}/hard`, { data: { reason: deleteReason } });
+      toast.success(`Game "${deleteModal.name}" permanently deleted`);
+      setDeleteModal(null);
+      setDeleteReason("");
+      fetchGames(meta.page);
+    } catch (err: any) {
+      toast.error(err.response?.data?.error?.message || "Failed to delete game");
     } finally {
       setActionLoading(null);
     }
@@ -412,20 +448,35 @@ export function AdminGamesTable() {
                             >
                               <Pencil className="h-3.5 w-3.5" />
                             </button>
-                            <button
-                              onClick={() => handleDelete(game)}
-                              disabled={
-                                actionLoading === game.id || !game.isActive
-                              }
-                              className="p-1.5 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors disabled:opacity-50"
-                              title={
-                                game.isActive
-                                  ? "Deactivate"
-                                  : "Already inactive"
-                              }
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
+                            {!game.isActive ? (
+                              <button
+                                onClick={() => handleReactivate(game)}
+                                disabled={actionLoading === game.id}
+                                className="p-1.5 rounded-lg bg-green-500/10 text-green-400 hover:bg-green-500/20 transition-colors disabled:opacity-50"
+                                title="Reactivate"
+                              >
+                                <RotateCcw className="h-3.5 w-3.5" />
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => handleDelete(game)}
+                                disabled={actionLoading === game.id}
+                                className="p-1.5 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors disabled:opacity-50"
+                                title="Deactivate"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                            {!game.isActive && (
+                              <button
+                                onClick={() => setDeleteModal({ id: game.id, name: game.name })}
+                                disabled={actionLoading === game.id}
+                                className="p-1.5 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors disabled:opacity-50"
+                                title="Hard Delete"
+                              >
+                                <Skull className="h-3.5 w-3.5" />
+                              </button>
+                            )}
                           </div>
                         </td>
                       </>
@@ -473,6 +524,30 @@ export function AdminGamesTable() {
             </div>
           )}
         </>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/60" onClick={() => { setDeleteModal(null); setDeleteReason(""); }} />
+          <div className="relative bg-surface-900 border border-surface-800 rounded-xl p-6 w-full max-w-md mx-4 shadow-2xl">
+            <h3 className="text-lg font-semibold text-slate-100 mb-1">Permanently Delete Game</h3>
+            <p className="text-sm text-slate-400 mb-1">This action is irreversible. The game will be removed from all profiles.</p>
+            <p className="text-sm font-medium text-red-400 mb-4">Game: {deleteModal.name}</p>
+            <textarea value={deleteReason} onChange={(e) => setDeleteReason(e.target.value)}
+              placeholder="Reason for deletion..."
+              rows={3}
+              className="w-full px-4 py-2.5 bg-surface-800 border border-surface-700 rounded-lg text-sm text-slate-200 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-red-500 resize-vertical mb-4" />
+            <div className="flex items-center justify-end gap-3">
+              <button onClick={() => { setDeleteModal(null); setDeleteReason(""); }} disabled={actionLoading === deleteModal.id}
+                className="text-sm font-medium text-slate-400 hover:text-slate-200 px-4 py-2 rounded-lg border border-surface-700 hover:border-surface-600 transition-colors">Cancel</button>
+              <button onClick={handleHardDelete} disabled={actionLoading === deleteModal.id || !deleteReason.trim()}
+                className="text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:bg-surface-700 disabled:text-slate-500 disabled:cursor-not-allowed px-4 py-2 rounded-lg transition-colors">
+                {actionLoading === deleteModal.id ? <Loader2 className="h-4 w-4 animate-spin inline" /> : null} Delete Permanently
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
