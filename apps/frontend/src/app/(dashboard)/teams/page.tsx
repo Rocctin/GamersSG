@@ -5,11 +5,11 @@ import { useAuth } from "@/hooks/use-auth";
 import apiClient from "@/lib/api-client";
 import { TeamCard } from "@/components/teams/team-card";
 import Link from "next/link";
-import { Plus, Loader2, Users, History, UserPlus, Clock } from "lucide-react";
+import { Plus, Loader2, Users, History, UserPlus, Clock, Search } from "lucide-react";
 import { toast } from "sonner";
 import type { TeamDto, TeamInviteDto } from "@gamers-sg/shared/dto";
 
-type Tab = "my-teams" | "invites" | "past";
+type Tab = "my-teams" | "invites" | "past" | "browse";
 
 export default function TeamsPage() {
   const { user } = useAuth();
@@ -18,6 +18,12 @@ export default function TeamsPage() {
   const [pastTeams, setPastTeams] = useState<(TeamDto & { myRole?: string; leftAt?: string })[]>([]);
   const [invites, setInvites] = useState<TeamInviteDto[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Browse
+  const [browseQuery, setBrowseQuery] = useState("");
+  const [browseTeams, setBrowseTeams] = useState<TeamDto[]>([]);
+  const [browseTotal, setBrowseTotal] = useState(0);
+  const [isBrowsing, setIsBrowsing] = useState(false);
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
@@ -36,9 +42,31 @@ export default function TeamsPage() {
     }
   }, []);
 
+  const fetchBrowseTeams = useCallback(async (search?: string) => {
+    setIsBrowsing(true);
+    try {
+      const { data } = await apiClient.get("/teams", {
+        params: search ? { search } : {},
+      });
+      setBrowseTeams(data.teams ?? []);
+      setBrowseTotal(data.total ?? 0);
+    } catch {
+      toast.error("Failed to load teams");
+    } finally {
+      setIsBrowsing(false);
+    }
+  }, []);
+
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Auto-load browse teams on first visit to the tab
+  useEffect(() => {
+    if (activeTab === "browse" && browseTeams.length === 0) {
+      fetchBrowseTeams();
+    }
+  }, [activeTab, browseTeams.length, fetchBrowseTeams]);
 
   const handleAcceptInvite = async (inviteId: string, teamId: string) => {
     try {
@@ -58,6 +86,15 @@ export default function TeamsPage() {
     } catch (err: any) {
       toast.error(err.response?.data?.error?.message || "Failed to decline invite");
     }
+  };
+
+  const handleBrowseSearch = () => {
+    const trimmed = browseQuery.trim();
+    if (trimmed && trimmed.length < 2) {
+      toast.error("Enter at least 2 characters to search");
+      return;
+    }
+    fetchBrowseTeams(trimmed || undefined);
   };
 
   return (
@@ -84,6 +121,7 @@ export default function TeamsPage() {
           { key: "my-teams" as Tab, label: "My Teams", icon: Users },
           { key: "invites" as Tab, label: "Invites", icon: UserPlus },
           { key: "past" as Tab, label: "Past Teams", icon: History },
+          { key: "browse" as Tab, label: "Browse", icon: Search },
         ].map((tab) => {
           const isActive = activeTab === tab.key;
           const badge =
@@ -176,6 +214,60 @@ export default function TeamsPage() {
             ))}
           </div>
         )
+      ) : activeTab === "browse" ? (
+        <div className="space-y-4">
+          {/* Search input */}
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={browseQuery}
+              onChange={(e) => setBrowseQuery(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleBrowseSearch()}
+              placeholder="Search teams by name..."
+              className="flex-1 px-4 py-2.5 bg-surface-900 border border-surface-700 rounded-lg text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-brand-500 text-sm"
+            />
+            <button
+              onClick={handleBrowseSearch}
+              disabled={isBrowsing}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-brand-500 hover:bg-brand-600 disabled:bg-surface-700 disabled:text-slate-500 text-white text-sm font-medium transition-colors"
+            >
+              {isBrowsing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Search className="h-4 w-4" />
+              )}
+              Search
+            </button>
+          </div>
+
+          {/* Results */}
+          {isBrowsing ? (
+            <div className="py-16 flex items-center justify-center">
+              <Loader2 className="h-8 w-8 text-brand-500 animate-spin" />
+            </div>
+          ) : browseTeams.length === 0 && browseQuery.trim() ? (
+            <EmptyState
+              title="No teams found"
+              description="Try a different search term."
+              icon={Search}
+            />
+          ) : browseTeams.length > 0 ? (
+            <div className="space-y-3">
+              <p className="text-sm text-slate-500">
+                {browseTotal} team{browseTotal !== 1 ? "s" : ""}
+              </p>
+              {browseTeams.map((team) => (
+                <TeamCard key={team.id} team={team} />
+              ))}
+            </div>
+          ) : (
+            <EmptyState
+              title="Browse teams"
+              description="Search for teams by name or browse all active teams."
+              icon={Search}
+            />
+          )}
+        </div>
       ) : pastTeams.length === 0 ? (
         <EmptyState
           title="No past teams"
