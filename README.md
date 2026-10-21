@@ -1,6 +1,6 @@
 # Gamers.SG
 
-Gamers.SG is a digital membership platform for gamers in Singapore, developed under the stewardship of the Singapore Cybersports and Online Gaming Association (SCOGA).
+Gamers.SG is designed as a professional networking platform catered towards the Esports/Gaming Community in Singapore, developed under Singapore Cybersports and Online Gaming Association (SCOGA).
 
 The platform is designed as a verified identity and services hub for the gaming community, bringing together gamer profiles, achievements, team management, tournaments, career opportunities, and member-focused services.
 
@@ -11,9 +11,6 @@ The platform is designed as a verified identity and services hub for the gaming 
 - Team and organization management
 - Tournament discovery and participation
 - Gaming-related jobs and opportunities
-- Members-only e-commerce and services
-- Authentication through magic links and JWT-based sessions
-- Shared types and DTOs across the frontend and backend
 
 ## Technology Stack
 
@@ -191,11 +188,3 @@ When contributing changes:
 3. Run the relevant development server and database services.
 4. Run `pnpm build` and `pnpm lint` before opening a pull request.
 5. Keep shared types and DTOs in `packages/shared` when they are used by both applications.
-
-## License
-
-No license has been specified for this repository yet. Contact the repository maintainers before using or redistributing the code.
-
-## Maintainer
-
-Gamers.SG is developed for SCOGA. For project or repository questions, contact the repository maintainers through GitHub.
